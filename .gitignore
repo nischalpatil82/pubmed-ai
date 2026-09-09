@@ -1,0 +1,13 @@
+# Secrets
+llm.env
+
+# Source data and build output - too big for git, rebuildable or uploaded
+# separately (see README).
+raw/
+store/
+index/
+logs/
+*.csv
+
+__pycache__/
+*.pyc

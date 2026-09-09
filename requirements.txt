@@ -1,0 +1,14 @@
+# Runtime only - what the web app needs to SERVE answers.
+# Deliberately excludes lxml: parsing XML is a build-time job, and the parquet
+# store ships already built.
+
+fastapi>=0.110
+uvicorn[standard]>=0.27
+polars>=1.0
+bm25s>=0.2
+PyStemmer>=2.2
+lancedb>=0.13
+pylance>=0.19
+sentence-transformers>=3.0
+torch>=2.2
+requests>=2.31

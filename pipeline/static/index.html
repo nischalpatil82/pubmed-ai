@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PubMed Literature Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --ground:#F4F7F6; --surface:#FFFFFF; --surface-2:#EAF0EF; --surface-3:#E0E8E7;
+  --ink:#101A19; --ink-soft:#566765; --ink-faint:#7C8D8A;
+  --rule:#D9E3E1; --rule-hard:#BFCCCA;
+  --accent:#008E86; --accent-ink:#00726C; --accent-wash:#E0F0EE;
+  --flag:#B03A22; --flag-ink:#97301B; --flag-wash:#F8E7E2;
+  --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --shadow:0 1px 2px rgba(16,26,25,.06),0 4px 16px rgba(16,26,25,.05);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0C1312; --surface:#141D1C; --surface-2:#1A2524; --surface-3:#22302E;
+    --ink:#E7EEEC; --ink-soft:#98A8A5; --ink-faint:#788885;
+    --rule:#243030; --rule-hard:#354443;
+    --accent:#1F93A8; --accent-ink:#5CC3CE; --accent-wash:#112A2E;
+    --flag:#C85940; --flag-ink:#E4886F; --flag-wash:#2B1611;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0C1312; --surface:#141D1C; --surface-2:#1A2524; --surface-3:#22302E;
+  --ink:#E7EEEC; --ink-soft:#98A8A5; --ink-faint:#788885;
+  --rule:#243030; --rule-hard:#354443;
+  --accent:#1F93A8; --accent-ink:#5CC3CE; --accent-wash:#112A2E;
+  --flag:#C85940; --flag-ink:#E4886F; --flag-wash:#2B1611;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--ground); color:var(--ink); font-family:var(--sans);
+  font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+button,input,select{font:inherit;color:inherit}
+
+/* ---------------------------------------------------------- header */
+header{
+  position:sticky; top:0; z-index:50; background:var(--surface);
+  border-bottom:1px solid var(--rule);
+}
+.hbar{
+  max-width:1180px; margin:0 auto; padding:12px 24px;
+  display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-.01em;white-space:nowrap}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);flex:none}
+.brand small{display:block;font-weight:400;font-size:11px;color:var(--ink-faint);letter-spacing:.02em}
+.hstats{margin-left:auto;display:flex;gap:20px;font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);flex-wrap:wrap}
+.hstats b{display:block;color:var(--ink);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.tgl{
+  background:var(--surface-2); border:1px solid var(--rule); border-radius:6px;
+  padding:6px 10px; cursor:pointer; font-size:12px; color:var(--ink-soft);
+}
+.tgl:hover{border-color:var(--rule-hard);color:var(--ink)}
+
+/* ---------------------------------------------------------- search */
+.searchwrap{max-width:1180px;margin:0 auto;padding:26px 24px 0}
+.sbox{position:relative;display:flex;gap:10px}
+.sbox input{
+  flex:1; padding:15px 17px 15px 44px; font-size:16px;
+  background:var(--surface); border:1px solid var(--rule-hard); border-radius:9px;
+  box-shadow:var(--shadow); outline:none;
+}
+.sbox input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+.sbox input::placeholder{color:var(--ink-faint)}
+.sicon{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:var(--ink-faint);pointer-events:none;display:flex}
+.sbtn{
+  padding:0 24px;background:var(--accent);color:#fff;border:none;border-radius:9px;
+  font-weight:600;cursor:pointer;white-space:nowrap;
+}
+.sbtn:hover{filter:brightness(1.08)}
+.sbtn:disabled{opacity:.5;cursor:default}
+
+.examples{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.examples span{font-size:12px;color:var(--ink-faint);margin-right:2px}
+.ex{
+  background:var(--surface-2);border:1px solid var(--rule);border-radius:20px;
+  padding:5px 13px;font-size:12.5px;cursor:pointer;color:var(--ink-soft);
+}
+.ex:hover{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-wash)}
+
+/* ---------------------------------------------------------- concepts */
+.concepts{max-width:1180px;margin:18px auto 0;padding:0 24px;display:none}
+.concepts.on{display:block}
+.clabel{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:9px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{
+  display:flex;align-items:center;gap:9px;background:var(--surface);
+  border:1px solid var(--rule-hard);border-radius:7px;padding:7px 13px;
+  cursor:pointer;font-size:13.5px;
+}
+.chip:hover{border-color:var(--accent)}
+.chip.sel{border-color:var(--accent);background:var(--accent-wash);color:var(--accent-ink);font-weight:500}
+.chip .kind{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;
+  padding:2px 6px;border-radius:3px;background:var(--surface-3);color:var(--ink-faint);
+}
+.chip.sel .kind{background:var(--accent);color:#fff}
+.chip .cnt{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);font-variant-numeric:tabular-nums}
+.chip.sel .cnt{color:var(--accent-ink)}
+
+/* ---------------------------------------------------------- tabs */
+.tabs{max-width:1180px;margin:24px auto 0;padding:0 24px;display:none;border-bottom:1px solid var(--rule)}
+.tabs.on{display:flex;gap:2px}
+.tab{
+  background:none;border:none;border-bottom:2px solid transparent;
+  padding:11px 15px;cursor:pointer;color:var(--ink-soft);font-size:14px;
+  display:flex;align-items:center;gap:8px;margin-bottom:-1px;
+}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--accent-ink);border-bottom-color:var(--accent);font-weight:600}
+.tab .n{
+  font-family:var(--mono);font-size:11px;background:var(--surface-2);
+  padding:1px 6px;border-radius:9px;color:var(--ink-faint);font-variant-numeric:tabular-nums;
+}
+.tab.on .n{background:var(--accent-wash);color:var(--accent-ink)}
+
+/* ---------------------------------------------------------- results */
+main{max-width:1180px;margin:0 auto;padding:22px 24px 80px;min-height:40vh}
+.meta{
+  font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);margin-bottom:16px;
+}
+.meta .facts{display:block;margin-top:7px}
+.meta .facts span{display:inline-block;margin-right:16px;white-space:nowrap}
+/* No box. A bordered pill whose border kept mis-sizing in the browser is a
+   decoration that cost four rounds of debugging; the label carries the meaning
+   on its own. Colour plus weight says the same thing and cannot break. */
+.badge{
+  display:block;font-size:11px;letter-spacing:.1em;font-weight:700;
+  margin-bottom:2px;
+}
+.badge.exact{color:var(--accent-ink)}
+.badge.rank{color:var(--ink-faint)}
+
+table{width:100%;border-collapse:collapse;background:var(--surface);
+  border:1px solid var(--rule);border-radius:9px;overflow:hidden;font-size:14px}
+th,td{text-align:left;padding:11px 15px;border-bottom:1px solid var(--rule)}
+th{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-faint);font-weight:500;background:var(--surface-2)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surface-2)}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.rank{color:var(--ink-faint);font-family:var(--mono);font-size:12px;width:38px}
+.barcell{width:120px}
+.bar{height:7px;background:var(--accent);border-radius:0 4px 4px 0;min-width:2px}
+
+/* paper cards */
+.paper{
+  background:var(--surface);border:1px solid var(--rule);border-radius:9px;
+  padding:16px 18px;margin-bottom:11px;
+}
+.paper:hover{border-color:var(--rule-hard)}
+.paper h3{margin:0 0 7px;font-size:15.5px;line-height:1.4;font-weight:600}
+.paper .pmeta{display:flex;gap:12px;flex-wrap:wrap;font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);margin-bottom:9px;align-items:center}
+.paper .pmeta .jr{color:var(--accent-ink)}
+.paper p{margin:0;font-size:13.5px;color:var(--ink-soft);line-height:1.6}
+.paper a{color:var(--accent-ink);text-decoration:none}
+.paper a:hover{text-decoration:underline}
+
+.caveat{
+  background:var(--flag-wash);border:1px solid var(--flag);border-left-width:3px;
+  border-radius:7px;padding:12px 15px;margin-bottom:16px;font-size:13.5px;color:var(--flag-ink);
+}
+.caveat b{display:block;margin-bottom:3px}
+.note{font-size:12.5px;color:var(--ink-faint);margin-bottom:14px}
+
+.askbtn{background:var(--accent);color:#fff;border:none;border-radius:8px;
+  padding:11px 20px;font-weight:600;cursor:pointer;font-size:14.5px}
+.askbtn:hover{filter:brightness(1.08)}
+.askbtn:disabled{opacity:.5;cursor:default}
+.answer{background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--accent);
+  border-radius:0 8px 8px 0;padding:18px 20px;margin-bottom:14px;font-size:15.5px;
+  line-height:1.7;white-space:pre-wrap}
+.trace{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);
+  background:var(--surface-2);border:1px solid var(--rule);border-radius:7px;
+  padding:11px 14px;margin-bottom:14px;overflow-x:auto}
+.trace b{color:var(--accent-ink);font-weight:500}
+.warnbox{background:var(--flag-wash);border:1px solid var(--flag);color:var(--flag-ink);
+  border-radius:7px;padding:11px 14px;margin-bottom:14px;font-size:13.5px}
+.morebtn{margin-left:10px;background:var(--surface-2);border:1px solid var(--rule-hard);
+  border-radius:5px;padding:3px 11px;font-size:12px;cursor:pointer;color:var(--ink-soft);
+  font-family:var(--mono)}
+.morebtn:hover{border-color:var(--accent);color:var(--accent-ink)}
+tbody tr.clickable{cursor:pointer}
+tbody tr.clickable:hover{background:var(--accent-wash)}
+tbody tr.clickable td:first-child::after{content:"";}
+.hint{font-size:12.5px;color:var(--ink-faint);margin:-6px 0 14px;display:flex;
+  align-items:center;gap:6px}
+.crumb{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.backb{background:var(--surface-2);border:1px solid var(--rule-hard);border-radius:6px;
+  padding:5px 12px;font-size:13px;cursor:pointer;color:var(--ink-soft)}
+.backb:hover{border-color:var(--accent);color:var(--accent-ink)}
+.crumbtitle{font-size:15.5px;font-weight:600}
+.tabs.on{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tab{white-space:nowrap}
+/* year bars: one series, one hue, no legend needed */
+.yearrow{display:grid;grid-template-columns:58px 1fr 62px;gap:12px;align-items:center;
+  padding:3px 0;font-family:var(--mono);font-size:12.5px}
+.yearrow .yb{height:14px;background:var(--accent);border-radius:0 3px 3px 0;min-width:2px}
+.yearrow .yv{text-align:right;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.yearrow .yl{color:var(--ink-faint);font-variant-numeric:tabular-nums}
+.affil{color:var(--ink-soft);font-size:12.5px;cursor:help}
+.affil.full{white-space:normal}
+.subhead{font-family:var(--slab,inherit);font-weight:600;font-size:16px;margin:26px 0 10px}
+.paper{cursor:pointer}
+.paper:hover{border-color:var(--accent);background:var(--surface)}
+.paper .openhint{font-size:11px;color:var(--ink-faint);font-family:var(--mono)}
+.paper:hover .openhint{color:var(--accent-ink)}
+.detail{border-top:1px solid var(--rule);margin-top:14px;padding-top:14px;cursor:default}
+.detail h4{font-family:var(--mono);font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-faint);margin:16px 0 7px;font-weight:500}
+.detail h4:first-child{margin-top:0}
+.detail p{font-size:14px;line-height:1.65;color:var(--ink);margin:0}
+.chiplist{display:flex;flex-wrap:wrap;gap:6px}
+.mchip{font-size:12px;padding:2px 9px;border-radius:12px;background:var(--surface-2);
+  border:1px solid var(--rule);color:var(--ink-soft)}
+.mchip.major{background:var(--accent-wash);border-color:var(--accent);color:var(--accent-ink);font-weight:500}
+.authorline{font-size:13.5px;line-height:1.7;color:var(--ink-soft)}
+.authorline b{color:var(--ink);font-weight:600}
+.affline{font-size:12px;color:var(--ink-faint);margin-top:6px;line-height:1.55}
+.dstat{display:inline-block;margin-right:20px;font-family:var(--mono);font-size:12px;color:var(--ink-soft)}
+.dstat b{color:var(--ink)}
+.empty{text-align:center;padding:70px 20px;color:var(--ink-faint)}
+.empty h2{font-size:19px;color:var(--ink-soft);font-weight:600;margin:0 0 8px}
+.empty p{margin:0;font-size:14px}
+.spinner{
+  width:26px;height:26px;border:2.5px solid var(--rule);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .7s linear infinite;margin:50px auto;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spinner{animation-duration:2s}}
+.err{background:var(--flag-wash);border:1px solid var(--flag);color:var(--flag-ink);
+  padding:14px 16px;border-radius:8px;font-size:14px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(max-width:720px){
+  .hstats{width:100%;margin-left:0;gap:14px}
+  .tabs.on{overflow-x:auto}
+  .barcell{display:none}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <span>Literature Intelligence<small id="corpusline">loading corpus…</small></span>
+    </div>
+    <div class="hstats" id="hstats"></div>
+    <button class="tgl" id="themebtn" title="Toggle theme">◐</button>
+  </div>
+</header>
+
+<div class="searchwrap">
+  <form class="sbox" id="form">
+    <span class="sicon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+      </svg>
+    </span>
+    <input id="q" placeholder="Ask about a drug, disease or topic…" autocomplete="off" spellcheck="false">
+    <button class="sbtn" id="go" type="submit">Search</button>
+  </form>
+  <div class="examples">
+    <span>Try</span>
+    <button class="ex">ovarian cancer</button>
+    <button class="ex">cisplatin</button>
+    <button class="ex">CAR-T therapy for relapsed leukemia</button>
+    <button class="ex">machine learning</button>
+    <button class="ex">GLP-1 receptor agonists</button>
+  </div>
+</div>
+
+<div class="concepts" id="concepts">
+  <div class="clabel">Matched concepts — pick one to scope the results</div>
+  <div class="chips" id="chips"></div>
+</div>
+
+<div class="tabs" id="tabs">
+  <button class="tab on" data-t="papers">Papers <span class="n" id="n-papers">–</span></button>
+  <button class="tab" data-t="journals">Journals <span class="n" id="n-journals">–</span></button>
+  <button class="tab" data-t="drugs">Drugs <span class="n" id="n-drugs">–</span></button>
+  <button class="tab" data-t="kols">Researchers <span class="n" id="n-kols">–</span></button>
+  <button class="tab" data-t="countries">Countries <span class="n" id="n-countries">–</span></button>
+  <button class="tab" data-t="institutions">Institutions <span class="n" id="n-institutions">–</span></button>
+  <button class="tab" data-t="ask">Ask <span class="n" id="n-ask">AI</span></button>
+</div>
+
+<main id="main">
+  <div class="empty">
+    <h2>Search 277,042 biomedical articles</h2>
+    <p>Counting questions are answered exactly over the whole corpus. Open questions are answered by ranked search.</p>
+  </div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => (s??"").toString().replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const num = n => (n??0).toLocaleString();
+
+let state = { q:"", concept:null, concepts:[], tab:"papers", data:{}, loading:false, k:25, drill:null };
+
+/* ---------------- theme ---------------- */
+// Light by default, regardless of the OS setting. This is a work tool shown in
+// meetings and on projectors, where a dark page reads badly; someone who wants
+// dark can toggle it and that choice is remembered.
+const saved = (()=>{ try { return localStorage.getItem("theme"); } catch(e){ return null; } })();
+document.documentElement.dataset.theme = saved || "light";
+$("#themebtn").onclick = () => {
+  const cur = document.documentElement.dataset.theme || "light";
+  const next = cur === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("theme", next); } catch(e){}
+};
+
+/* ---------------- boot ---------------- */
+async function boot(){
+  try {
+    const s = await (await fetch("/api/stats")).json();
+    const core = s.year_core ? `${s.year_core[0]}–${s.year_core[1]}` : "";
+    const span = s.year_range ? `${s.year_range[0]}–${s.year_range[1]}` : "";
+    $("#corpusline").textContent =
+      `${num(s.articles)} articles · ${num(s.journals)} journals · ` +
+      `95% from ${core}`;
+    $("#corpusline").title =
+      `Full range ${span}, but that is one 1886 paper and two mistyped 2028 ones. ` +
+      `95% of the corpus falls in ${core}.`;
+    const dense = (s.retrievers||[]).includes("vector");
+    $("#hstats").innerHTML = `
+      <div>articles<b>${num(s.articles)}</b></div>
+      <div>authors<b>${num(s.authors)}</b></div>
+      <div>authorships<b>${num(s.authorship_rows)}</b></div>
+      <div>concepts<b>${num(s.concepts)}</b></div>
+      <div>retrieval<b>${dense ? "hybrid" : "keyword"}</b></div>`;
+  } catch(e){ $("#corpusline").textContent = "backend not reachable"; }
+}
+boot();
+
+/* ---------------- search ---------------- */
+$("#form").onsubmit = e => { e.preventDefault(); run($("#q").value.trim()); };
+document.querySelectorAll(".ex").forEach(b => b.onclick = e => {
+  e.preventDefault(); $("#q").value = b.textContent; run(b.textContent);
+});
+addEventListener("keydown", e => {
+  if (e.key === "/" && document.activeElement !== $("#q")) { e.preventDefault(); $("#q").focus(); }
+});
+
+async function run(q){
+  if (!q) return;
+  state.q = q; state.loading = true; state.data = {}; state.askLoading = false; state.drill = null;
+  $("#go").disabled = true;
+  $("#main").innerHTML = '<div class="spinner"></div>';
+  $("#tabs").classList.add("on");
+
+  try {
+    const r = await (await fetch("/api/resolve?q=" + encodeURIComponent(q))).json();
+    state.concepts = r.concepts || [];
+    state.concept = state.concepts.length ? state.concepts[0] : null;
+    renderChips();
+  } catch(e){ state.concepts = []; state.concept = null; }
+
+  await loadAll();
+  state.loading = false;
+  $("#go").disabled = false;
+  render();
+}
+
+function renderChips(){
+  const box = $("#concepts");
+  if (!state.concepts.length){ box.classList.remove("on"); return; }
+  box.classList.add("on");
+  $("#chips").innerHTML = state.concepts.map((c,i) => `
+    <button class="chip ${state.concept && c.concept_id===state.concept.concept_id ? "sel":""}" data-i="${i}">
+      <span class="kind">${esc(c.kind)}</span>
+      <span>${esc(c.concept_name)}</span>
+      <span class="cnt">${num(c.n_papers)}</span>
+    </button>`).join("");
+  document.querySelectorAll(".chip").forEach(el => el.onclick = async () => {
+    state.concept = state.concepts[+el.dataset.i];
+    renderChips();
+    $("#main").innerHTML = '<div class="spinner"></div>';
+    await loadAll(); render();
+  });
+}
+
+async function loadAll(){
+  const cid = state.concept ? "concept_id=" + encodeURIComponent(state.concept.concept_id) : "";
+  const get = async (url, key) => {
+    try { state.data[key] = await (await fetch(url)).json(); }
+    catch(e){ state.data[key] = {error:String(e)}; }
+  };
+  await Promise.all([
+    get("/api/search?k=" + state.k + "&q=" + encodeURIComponent(state.q), "papers"),
+    cid ? get("/api/journals?limit=30&" + cid, "journals") : (state.data.journals=null),
+    cid ? get("/api/drugs?limit=30&" + cid, "drugs")       : (state.data.drugs=null),
+    cid ? get("/api/kols?limit=25&" + cid, "kols")         : (state.data.kols=null),
+    cid ? get("/api/countries?limit=30&" + cid, "countries")       : (state.data.countries=null),
+    cid ? get("/api/institutions?limit=30&" + cid, "institutions") : (state.data.institutions=null),
+  ]);
+  $("#n-papers").textContent   = state.data.papers?.results?.length ?? "–";
+  $("#n-journals").textContent = state.data.journals ? num(state.data.journals.total_journals) : "–";
+  $("#n-drugs").textContent    = state.data.drugs ? num(state.data.drugs.total_substances) : "–";
+  $("#n-kols").textContent     = state.data.kols ? num(state.data.kols.total_authors) : "–";
+  $("#n-countries").textContent    = state.data.countries ? num(state.data.countries.total_countries) : "–";
+  $("#n-institutions").textContent = state.data.institutions ? num(state.data.institutions.total_institutions) : "–";
+}
+
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x===t));
+  state.tab = t.dataset.t; render();
+});
+
+/* ---------------- render ---------------- */
+function scopeLine(extra, d){
+  const c = state.concept;
+  const sc = d && d.scope;
+  const exp = sc && sc.expanded
+    ? `<span title="MeSH files papers under the most specific term, so the parent alone misses most of its own topic.">+ ${num(sc.descriptors_included - 1)} narrower MeSH terms</span>`
+    : "";
+  const parts = String(extra).split("|||");
+  const badge = parts[0] || "";
+  const rest = parts.slice(1).join("");
+  return `<div class="meta">
+    ${badge}
+    <span class="facts">
+      ${rest}
+      ${c ? `<span>scope: ${esc(c.concept_name)} (${esc(c.concept_id)})</span>` : `<span>whole corpus</span>`}
+      ${exp}
+    </span>
+  </div>`;
+}
+
+function render(){
+  const m = $("#main");
+  if (state.drill) return void renderDrill();
+  const d = state.data[state.tab];
+
+  if (state.tab === "ask") return void renderAsk();
+
+  if (state.tab !== "papers" && !state.concept){
+    m.innerHTML = `<div class="empty"><h2>No concept matched</h2>
+      <p>Journals, drugs and researchers are counted within a concept.
+      Try a drug, disease or topic name — or use the Papers tab for free-text search.</p></div>`;
+    return;
+  }
+  if (!d){ m.innerHTML = '<div class="spinner"></div>'; return; }
+  if (d.error || d.detail){
+    const msg = String(d.detail || d.error);
+    const starting = /still starting/i.test(msg);
+    m.innerHTML = `<div class="${starting ? "note" : "err"}">${esc(msg)}</div>` +
+      (starting ? '<div class="spinner"></div>' : "");
+    if (starting) setTimeout(() => run(state.q), 8000);   // retry itself
+    return;
+  }
+
+  if (state.tab === "papers"){
+    m.innerHTML = renderPapers(d);
+    wirePapers();
+    const b = document.getElementById("moreb");
+    if (b) b.onclick = async () => {
+      state.k *= 2;
+      b.disabled = true; b.textContent = "loading...";
+      try {
+        state.data.papers = await (await fetch("/api/search?k=" + state.k +
+          "&q=" + encodeURIComponent(state.q))).json();
+      } catch(e){}
+      render();
+    };
+    return;
+  }
+  if (state.tab === "journals"){ m.innerHTML = renderJournals(d); return void wireRows(); }
+  if (state.tab === "drugs"){    m.innerHTML = renderDrugs(d);    return void wireRows(); }
+  if (state.tab === "kols"){     m.innerHTML = renderKols(d);     return void wireRows(); }
+  if (state.tab === "countries"){    m.innerHTML = renderCountries(d);    return; }
+  if (state.tab === "institutions"){ m.innerHTML = renderInstitutions(d); return; }
+}
+
+async function openDrill(kind, value, label){
+  state.drill = {kind, value, label, data:null};
+  render();
+  const cid = state.concept ? "&concept_id=" + encodeURIComponent(state.concept.concept_id) : "";
+  const key = kind === "journal" ? "journal"
+            : kind === "substance" ? "substance_ui" : "author_key";
+  try {
+    state.drill.data = await (await fetch(
+      `/api/papers?limit=50&${key}=${encodeURIComponent(value)}${cid}`)).json();
+  } catch(e){ state.drill.data = {error:String(e)}; }
+  render();
+}
+
+function renderDrill(){
+  const m = $("#main");
+  const d = state.drill.data;
+  const head = `<div class="crumb">
+      <button class="backb" id="backb">&larr; Back to ${esc(state.tab === "kols" ? "researchers" : state.tab)}</button>
+      <span class="crumbtitle">${esc(state.drill.label)}</span>
+    </div>`;
+
+  if (state.drill.kind === "paper"){
+    if (!d){ m.innerHTML = head + '<div class="spinner"></div>'; wireBack(); return; }
+    if (d.error || d.detail){
+      m.innerHTML = head + `<div class="err">${esc(d.detail || d.error)}</div>`;
+      wireBack(); return;
+    }
+    m.innerHTML = head + `
+      <div class="meta">
+        <span class="badge exact">FULL RECORD</span>
+        <span class="facts">
+          <span>${esc(d.journal || "")}</span>
+          <span>${esc(d.pub_year ?? "n.d.")}</span>
+          <span>PMID ${esc(d.pmid)}</span>
+          <span>${d.ms} ms</span>
+        </span>
+      </div>
+      <div class="pmeta" style="margin-bottom:18px">
+        ${d.doi ? `<a href="https://doi.org/${esc(d.doi)}" target="_blank" rel="noopener">doi &#8599;</a>` : ""}
+        <a href="https://pubmed.ncbi.nlm.nih.gov/${esc(d.pmid)}/" target="_blank" rel="noopener">open on PubMed &#8599;</a>
+      </div>
+      <div class="detail" style="border-top:none;margin-top:0;padding-top:0">
+        ${renderDetail(d)}
+      </div>`;
+    wireBack(); return;
+  }
+  if (!d){ m.innerHTML = head + '<div class="spinner"></div>'; wireBack(); return; }
+  if (d.error || d.detail){
+    m.innerHTML = head + `<div class="err">${esc(d.detail||d.error)}</div>`; wireBack(); return;
+  }
+  m.innerHTML = head +
+    `<div class="meta"><span class="badge exact">EXACT · ALL ${num(d.total)}</span>
+       <span>${d.ms} ms</span>
+       ${state.concept ? `<span>within ${esc(state.concept.concept_name)}</span>` : ""}</div>
+     <div class="note">These are the ${num(d.total)} papers counted in that row.
+       Showing ${d.results.length}, newest first.</div>` +
+    d.results.map(r => `
+      <article class="paper" data-pmid="${esc(r.pmid)}">
+        <h3>${esc(r.title)}</h3>
+        <div class="pmeta">
+          <span class="jr">${esc(r.journal||"")}</span>
+          <span class="openhint">click for full record</span>
+          <span>${esc(r.pub_year??"n.d.")}</span>
+          <span>PMID ${esc(r.pmid)}</span>
+          ${r.doi ? `<a href="https://doi.org/${esc(r.doi)}" target="_blank" rel="noopener">doi &#8599;</a>` : ""}
+          <a href="https://pubmed.ncbi.nlm.nih.gov/${esc(r.pmid)}/" target="_blank" rel="noopener">PubMed &#8599;</a>
+        </div>
+        ${r.snippet ? `<p>${esc(r.snippet)}</p>` : ""}
+      </article>`).join("");
+  wireBack(); wirePapers();
+}
+
+function wireBack(){
+  const b = document.getElementById("backb");
+  if (b) b.onclick = () => { state.drill = null; render(); };
+}
+
+function renderAsk(){
+  const m = $("#main");
+  const a = state.data.ask;
+
+  if (state.askLoading){
+    m.innerHTML = `<div class="meta"><span>${esc(state.q)}</span></div>
+      <div class="spinner"></div>
+      <p style="text-align:center;color:var(--ink-faint);font-size:13.5px">
+      Running the local model on CPU — this takes a few minutes.<br>
+      The other tabs already have exact answers in under a second.</p>`;
+    return;
+  }
+  if (!a){
+    m.innerHTML = `<div class="meta"><span>plain-English answer, generated on demand</span></div>
+      <p style="color:var(--ink-soft);max-width:62ch">A local language model picks the right
+      tool, reads the exact numbers it returns, and writes the answer. It never produces a
+      number itself — every figure is checked against a tool result before you see it.</p>
+      <p style="color:var(--ink-faint);font-size:13.5px;max-width:62ch">On this CPU one answer
+      takes a few minutes, so it only runs when you ask.</p>
+      <button class="askbtn" id="askgo">Generate answer for "${esc(state.q)}"</button>`;
+    $("#askgo").onclick = runAsk;
+    return;
+  }
+  if (a.error || a.detail){
+    m.innerHTML = `<div class="err">${esc(a.detail || a.error)}</div>
+      <button class="askbtn" id="askgo" style="margin-top:12px">Try again</button>`;
+    $("#askgo").onclick = runAsk;
+    return;
+  }
+
+  const secs = a.ms ? (a.ms/1000).toFixed(0) : "?";
+  let html = `<div class="meta">
+      <span class="badge rank">GENERATED</span>
+      <span>${esc(a.model||"")}</span><span>${secs}s</span>
+      <span>${a.steps ?? 0} step(s)</span></div>`;
+
+  if (a.refused){
+    html += `<div class="warnbox"><b>Refused to answer.</b> No tool returned any
+      records, so there was nothing to summarise. The system stops here rather
+      than writing something plausible.</div>`;
+  }
+  if (a.unverified_numbers && a.unverified_numbers.length){
+    html += `<div class="warnbox"><b>Unverified numbers:</b>
+      ${esc(a.unverified_numbers.join(", "))} — these did not appear in any tool
+      result. Treat them as unreliable.</div>`;
+  }
+
+  html += `<div class="answer">${esc(a.answer||"")}</div>`;
+
+  if (a.calls && a.calls.length){
+    html += `<div class="trace"><b>tools called</b><br>` +
+      a.calls.map(c => `&nbsp;&nbsp;${esc(c.tool)}(${esc(JSON.stringify(c.args))})`).join("<br>") +
+      `</div>`;
+  }
+  html += `<button class="askbtn" id="askgo">Ask again</button>`;
+  m.innerHTML = html;
+  $("#askgo").onclick = runAsk;
+}
+
+async function runAsk(){
+  state.askLoading = true; state.data.ask = null; renderAsk();
+  try{
+    const r = await fetch("/api/ask?q=" + encodeURIComponent(state.q));
+    state.data.ask = await r.json();
+  }catch(e){ state.data.ask = {error: String(e)}; }
+  state.askLoading = false;
+  renderAsk();
+}
+
+function renderPapers(d){
+  const rets = (d.retrievers||[]).join(" + ") || "bm25";
+  const head = scopeLine(
+    `<span class="badge rank">RANKED SAMPLE</span>|||<span>${rets}</span><span>${d.ms} ms</span>`, d);
+  if (!d.results?.length) return head + `<div class="empty"><h2>No matches</h2><p>Try different wording.</p></div>`;
+  const scoped = state.data.journals ? state.data.journals.total_papers : null;
+  const ofTotal = scoped ? ` out of ${num(scoped)} papers on this topic` : "";
+  return head + `<div class="note">Showing the top ${d.results.length} by relevance${ofTotal}.
+    This tab ranks; it never counts. Use Journals, Drugs and Researchers for exact totals.
+    ${d.results.length >= state.k ? `<button class="morebtn" id="moreb">Show ${state.k*2}</button>` : ""}</div>` +
+    d.results.map(r => `
+      <article class="paper" data-pmid="${esc(r.pmid)}">
+        <h3>${esc(r.title)}</h3>
+        <div class="pmeta">
+          <span class="jr">${esc(r.journal||r.medline_ta||"")}</span>
+          <span>${esc(r.pub_year??"n.d.")}</span>
+          <span>PMID ${esc(r.pmid)}</span>
+          <span class="openhint">click for full record</span>
+          ${r.doi ? `<a href="https://doi.org/${esc(r.doi)}" target="_blank" rel="noopener">doi ↗</a>` : ""}
+          <a href="https://pubmed.ncbi.nlm.nih.gov/${esc(r.pmid)}/" target="_blank" rel="noopener">PubMed ↗</a>
+        </div>
+        ${r.snippet ? `<p>${esc(r.snippet)}</p>` : ""}
+      </article>`).join("");
+}
+
+function wirePapers(){
+  // Open a full page with a Back button, exactly like clicking a journal or a
+  // researcher. One interaction model across every table beats two.
+  document.querySelectorAll("article.paper[data-pmid]").forEach(card => {
+    card.onclick = ev => {
+      if (ev.target.closest("a")) return;      // links keep their own behaviour
+      const title = card.querySelector("h3")?.textContent || card.dataset.pmid;
+      openPaper(card.dataset.pmid, title);
+    };
+  });
+}
+
+async function openPaper(pmid, title){
+  state.drill = {kind: "paper", value: pmid, label: title, data: null};
+  render();
+  try {
+    state.drill.data = await (await fetch("/api/article/" + encodeURIComponent(pmid))).json();
+  } catch(e){ state.drill.data = {error: String(e)}; }
+  render();
+}
+
+function renderDetail(d){
+  if (d.detail || d.error) return `<p>${esc(d.detail || d.error)}</p>`;
+  let h = "";
+
+  if (d.abstract){
+    h += `<h4>Abstract</h4><p>${esc(d.abstract)}</p>`;
+  } else {
+    h += `<h4>Abstract</h4><p style="color:var(--ink-faint)">This record has no abstract.</p>`;
+  }
+
+  if (d.authors?.length){
+    h += `<h4>Authors (${d.authors.length})</h4><div class="authorline">` +
+      d.authors.map(a => {
+        const role = a.is_first ? " (first)" : a.is_last ? " (senior)" : "";
+        const orc = a.orcid ? ` <span style="font-family:var(--mono);font-size:10px;color:var(--accent-ink)">ORCID</span>` : "";
+        return `<b>${esc(a.display_name||"—")}</b>${role}${orc}`;
+      }).join(" · ") + `</div>`;
+    const aff = d.authors.find(a => a.affiliation);
+    if (aff) h += `<div class="affline">${esc(aff.affiliation)}</div>`;
+  }
+
+  if (d.mesh?.length){
+    h += `<h4>Indexed under (MeSH)</h4><div class="chiplist">` +
+      d.mesh.map(m => `<span class="mchip${m.is_major ? " major" : ""}" title="${esc(m.descriptor_ui)}">${esc(m.descriptor_name)}</span>`).join("") +
+      `</div>`;
+  }
+  if (d.substances?.length){
+    h += `<h4>Substances</h4><div class="chiplist">` +
+      d.substances.map(s => `<span class="mchip" title="${esc(s.registry_number||"")}">${esc(s.substance_name)}</span>`).join("") +
+      `</div>`;
+  }
+  if (d.keywords?.length){
+    h += `<h4>Author keywords</h4><div class="chiplist">` +
+      d.keywords.map(k => `<span class="mchip">${esc(k)}</span>`).join("") + `</div>`;
+  }
+  if (d.publication_types?.length){
+    h += `<h4>Study type</h4><div class="chiplist">` +
+      d.publication_types.map(t => `<span class="mchip">${esc(t)}</span>`).join("") + `</div>`;
+  }
+  if (d.trials?.length){
+    h += `<h4>Registered trials</h4><div class="chiplist">` +
+      d.trials.map(t => String(t.accession||"").startsWith("NCT")
+        ? `<a class="mchip" href="https://clinicaltrials.gov/study/${esc(t.accession)}" target="_blank" rel="noopener">${esc(t.accession)} &#8599;</a>`
+        : `<span class="mchip">${esc(t.databank)} ${esc(t.accession)}</span>`).join("") + `</div>`;
+  }
+
+  h += `<h4>In this corpus</h4><div>
+    <span class="dstat">cited by <b>${num(d.cited_by_in_corpus)}</b></span>
+    <span class="dstat">references <b>${num(d.references_in_corpus)}</b></span>
+    <span class="dstat">${esc(d.journal_country||"")}</span>
+    ${d.pmcid ? `<span class="dstat">${esc(d.pmcid)}</span>` : ""}</div>`;
+  return h;
+}
+
+function wireRows(){
+  document.querySelectorAll(".affil").forEach(el => el.onclick = ev => {
+    ev.stopPropagation();               // do not trigger the row drill-down
+    el.classList.toggle("full");
+    el.textContent = el.classList.contains("full")
+      ? el.title : (el.title.slice(0,60) + (el.title.length>60 ? "…" : ""));
+  });
+  const rows = document.querySelectorAll("tr.clickable");
+  if (!rows.length) return;
+  // Tell people the rows open. A table that silently does nothing on click
+  // reads as broken; one that says what a click does reads as a feature.
+  const tbl = document.querySelector("table");
+  if (tbl && !document.querySelector(".hint")) {
+    const h = document.createElement("div");
+    h.className = "hint";
+    h.textContent = "Click any row to see the papers behind that number.";
+    tbl.parentNode.insertBefore(h, tbl);
+  }
+  rows.forEach(tr => tr.onclick = () =>
+    openDrill(tr.dataset.drill, tr.dataset.v, tr.dataset.l));
+}
+
+function bar(v, max){ return `<div class="bar" style="width:${max ? Math.max(2, v/max*100) : 2}%"></div>`; }
+
+function renderJournals(d){
+  const head = scopeLine(`<span class="badge exact">EXACT · ALL ${num(d.total_journals)} JOURNALS</span>|||<span>${d.ms} ms</span>`, d);
+  if (!d.results?.length) return head + `<div class="empty"><h2>No journals</h2><p>Nothing indexed for this concept.</p></div>`;
+  const max = d.results[0].papers;
+  return head + `<div class="note">${num(d.total_journals)} journals published ${num(d.total_papers)} papers on this concept.
+    Showing the top ${d.results.length}.</div>
+    <table><thead><tr><th></th><th>Journal</th><th>Published in</th><th>Papers</th><th></th></tr></thead><tbody>` +
+    d.results.map((r,i)=>`<tr class="clickable" data-drill="journal"
+        data-v="${esc(r.medline_ta||"")}" data-l="${esc(r.medline_ta||"")} — ${num(r.papers)} papers">
+      <td class="rank">${i+1}</td>
+      <td>${esc(r.journal_title || r.medline_ta || "—")}
+        ${r.journal_title && r.medline_ta && r.journal_title !== r.medline_ta
+          ? `<div style="font-family:var(--mono);font-size:11px;color:var(--ink-faint);margin-top:2px">${esc(r.medline_ta)}</div>`
+          : ""}</td>
+      <td>${esc(r.country||"—")}</td>
+      <td class="n">${num(r.papers)}</td>
+      <td class="barcell">${bar(r.papers,max)}</td></tr>`).join("") + `</tbody></table>`;
+}
+
+function renderDrugs(d){
+  const head = scopeLine(`<span class="badge exact">EXACT · ALL ${num(d.total_substances)} SUBSTANCES</span>|||<span>${d.ms} ms</span>`, d);
+  if (!d.results?.length) return head + `<div class="empty"><h2>No substances</h2><p>No chemicals indexed for this concept.</p></div>`;
+  const max = d.results[0].papers;
+  return head + `<div class="note">${esc(d.filter_note||"")}</div>
+    <table><thead><tr><th></th><th>Substance</th><th>Registry</th><th>Papers</th><th></th></tr></thead><tbody>` +
+    d.results.map((r,i)=>`<tr class="clickable" data-drill="substance"
+        data-v="${esc(r.substance_ui||"")}" data-l="${esc(r.substance_name)} — ${num(r.papers)} papers">
+      <td class="rank">${i+1}</td>
+      <td>${esc(r.substance_name)}</td>
+      <td class="n" style="color:var(--ink-faint)">${esc(r.registry_number||"—")}</td>
+      <td class="n">${num(r.papers)}</td>
+      <td class="barcell">${bar(r.papers,max)}</td></tr>`).join("") + `</tbody></table>`;
+}
+
+function simpleTable(d, cols, rows, headExtra){
+  const head = scopeLine(headExtra, d);
+  if (!rows.length) return head + `<div class="empty"><h2>Nothing here</h2>
+    <p>No records for this concept.</p></div>`;
+  return head +
+    (d.caveat ? `<div class="caveat"><b>Read this with the number</b>${esc(d.caveat)}</div>` : "") +
+    `<div class="tscroll"><table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead>
+     <tbody>${rows.join("")}</tbody></table></div>`;
+}
+
+function renderCountries(d){
+  if (!d) return '<div class="spinner"></div>';
+  const max = d.results?.[0]?.papers || 1;
+  const rows = (d.results||[]).map((r,i)=>`<tr>
+    <td class="rank">${i+1}</td><td>${esc(r.country)}</td>
+    <td class="n">${num(r.papers)}</td>
+    <td class="barcell">${bar(r.papers,max)}</td></tr>`);
+  return simpleTable(d, ["","Country","Papers",""], rows,
+    `<span class="badge exact">EXACT · ALL ${num(d.total_countries||0)} COUNTRIES</span>|||<span>${d.ms} ms</span>`);
+}
+
+function renderInstitutions(d){
+  if (!d) return '<div class="spinner"></div>';
+  const max = d.results?.[0]?.papers || 1;
+  const rows = (d.results||[]).map((r,i)=>`<tr>
+    <td class="rank">${i+1}</td><td>${esc(r.institution)}</td>
+    <td class="n">${num(r.papers)}</td>
+    <td class="barcell">${bar(r.papers,max)}</td></tr>`);
+  return simpleTable(d, ["","Institution","Papers",""], rows,
+    `<span class="badge exact">EXACT · ALL ${num(d.total_institutions||0)} INSTITUTIONS</span>|||<span>${d.ms} ms</span>`);
+}
+
+function renderTrend(d){
+  if (!d) return '<div class="spinner"></div>';
+  const rows = (d.results||[]).filter(r => r.pub_year >= 2000);
+  const head = scopeLine(
+    `<span class="badge exact">EXACT · ${num(d.total_papers||0)} PAPERS</span>|||<span>${d.ms} ms</span>`, d);
+  if (!rows.length) return head + `<div class="empty"><h2>No dated papers</h2></div>`;
+  const max = Math.max(...rows.map(r=>r.papers));
+  let out = head + `<div class="note">Papers per year. Recent years dominate because
+    95% of this corpus is 2014&ndash;2026 &mdash; a rise here is partly real growth and
+    partly what the 20 files happen to contain.</div>` +
+    rows.map(r=>`<div class="yearrow">
+      <span class="yl">${r.pub_year}</span>
+      <span><span class="yb" style="width:${Math.max(2, r.papers/max*100)}%"></span></span>
+      <span class="yv">${num(r.papers)}</span></div>`).join("");
+
+  const st = state.data.study_types;
+  if (st && st.results?.length){
+    const m2 = st.results[0].papers;
+    out += `<div class="subhead">Kinds of study</div>` +
+      st.results.map(r=>`<div class="yearrow">
+        <span class="yl" style="width:auto"></span>
+        <span>${esc(r.type_name)}</span>
+        <span class="yv">${num(r.papers)}</span></div>`).join("");
+  }
+  return out;
+}
+
+function renderCited(d){
+  if (!d) return '<div class="spinner"></div>';
+  const head = scopeLine(
+    `<span class="badge exact">MOST CITED WITHIN THIS CORPUS</span>|||<span>${d.ms} ms</span>`, d);
+  if (!d.results?.length) return head + `<div class="empty"><h2>No citation data</h2>
+    <p>None of these papers are cited by others in this corpus.</p></div>`;
+  return head +
+    (d.caveat ? `<div class="caveat"><b>Read this with the number</b>${esc(d.caveat)}</div>` : "") +
+    d.results.map(r=>`<article class="paper">
+      <h3>${esc(r.title || "(paper not in this corpus)")}</h3>
+      <div class="pmeta">
+        <span class="jr">${esc(r.journal||"")}</span>
+        <span>${esc(r.pub_year??"n.d.")}</span>
+        <span>PMID ${esc(r.pmid)}</span>
+        <span style="color:var(--accent-ink);font-weight:600">cited ${num(r.times_cited)}&times;</span>
+        <a href="https://pubmed.ncbi.nlm.nih.gov/${esc(r.pmid)}/" target="_blank" rel="noopener">PubMed &#8599;</a>
+      </div></article>`).join("");
+}
+
+function renderTrials(d){
+  if (!d) return '<div class="spinner"></div>';
+  const head = scopeLine(
+    `<span class="badge exact">EXACT · ALL ${num(d.total_links||0)} TRIAL LINKS</span>|||<span>${d.ms} ms</span>`, d);
+  if (!d.results?.length) return head + `<div class="empty"><h2>No registered trials</h2>
+    <p>No paper on this topic links to a trial registry.</p></div>`;
+  return head +
+    (d.caveat ? `<div class="caveat"><b>Read this with the number</b>${esc(d.caveat)}</div>` : "") +
+    d.results.map(r=>`<article class="paper">
+      <h3>${esc(r.title||"")}</h3>
+      <div class="pmeta">
+        <span>${esc(r.pub_year??"n.d.")}</span>
+        <span>PMID ${esc(r.pmid)}</span>
+        <span class="jr">${esc(r.databank)} ${esc(r.accession)}</span>
+        ${String(r.accession||"").startsWith("NCT")
+          ? `<a href="https://clinicaltrials.gov/study/${esc(r.accession)}" target="_blank" rel="noopener">trial &#8599;</a>` : ""}
+      </div></article>`).join("");
+}
+
+function renderKols(d){
+  const head = scopeLine(`<span class="badge exact">EXACT · ALL ${num(d.total_authors)} RESEARCHERS</span>|||<span>${d.ms} ms</span>`, d);
+  let out = head;
+  out += `<div class="note">Score = papers + (first author &times; 1.5) +
+    (senior author &times; 2.0) + (recent papers &times; 1.0). First author did the work,
+    senior/last author ran the lab &mdash; which is why someone with fewer papers but
+    many senior positions can rank higher.</div>`;
+  if (d.caveat) out += `<div class="caveat"><b>Author identity is provisional</b>${esc(d.caveat)}</div>`;
+  if (!d.results?.length) return out + `<div class="empty"><h2>No researchers</h2><p>Nothing indexed for this concept.</p></div>`;
+  const max = d.results[0].kol_score;
+  return out + `<table><thead><tr>
+      <th></th><th>Researcher</th><th>Affiliation</th><th>Papers</th><th>First</th><th>Senior</th><th>Recent</th><th>Last</th><th>Score</th><th></th>
+    </tr></thead><tbody>` +
+    d.results.map((r,i)=>`<tr class="clickable" data-drill="author"
+        data-v="${esc(r.author_key||"")}" data-l="${esc(r.name)} — ${num(r.papers)} papers">
+      <td class="rank">${i+1}</td>
+      <td>${esc(r.name)}${r.orcid?` <span style="font-family:var(--mono);font-size:10px;color:var(--accent-ink)">ORCID</span>`:""}</td>
+      <td><span class="affil" title="${esc(r.affiliation||r.main_country||"")}"
+        >${esc((r.affiliation||r.main_country||"—").slice(0,60))}${(r.affiliation||"").length>60?"…":""}</span></td>
+      <td class="n">${num(r.papers)}</td>
+      <td class="n">${num(r.first_author)}</td>
+      <td class="n">${num(r.senior_author)}</td>
+      <td class="n">${num(r.recent)}</td>
+      <td class="n">${esc(r.latest_year??"—")}</td>
+      <td class="n" style="font-weight:600">${(r.kol_score??0).toFixed(1)}</td>
+      <td class="barcell">${bar(r.kol_score,max)}</td></tr>`).join("") + `</tbody></table>`;
+}
+</script>
+</body>
+</html>

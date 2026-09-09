@@ -1,0 +1,4 @@
+# Everything in requirements.txt PLUS the tools that turn raw XML into the
+# store. Only needed when adding new .xml.gz files.
+-r requirements.txt
+lxml>=5.0
