@@ -1,273 +1,412 @@
-#!/usr/bin/env python3
-"""
-Retrieval for the no-SQL stack: BM25 + dense vectors, fused, on CPU.
-
-Two deliberate choices for a CPU-only build:
-
-1. BM25 runs on numpy and needs no model download, so keyword search works the
-   moment the Parquet exists. On a laptop it is also 100x cheaper than dense
-   retrieval - and on biomedical text, exact term matching on drug names, gene
-   symbols and MeSH terms is genuinely strong. Do not treat it as the fallback.
-
-2. Dense vectors are added by a separate, resumable pass. Embedding is the only
-   expensive step in this whole system on CPU, so it must be interruptible and
-   must never need redoing. Vectors land in LanceDB (embedded, no server).
-
-Contextual enrichment: each abstract is prefixed with its journal, year and
-MeSH terms before embedding. That normally costs an LLM call per chunk; here
-the metadata is already structured, so the recall gain is free.
-"""
+"""Bounded lexical builds, versioned passage vectors and filter-aware retrieval."""
 from __future__ import annotations
-
 import argparse
 import json
+import math
 import os
-import time
-
+import re
 import numpy as np
 import polars as pl
+import pyarrow.parquet as pq
+from dataset import paths, atomic_json, read_json, digest, space_guard, BuildLock
 
-STORE = os.environ.get("PUBMED_STORE", "./store")
-INDEX = os.environ.get("PUBMED_INDEX", "./index")
+CHUNK_VERSION = "token-offset-v1"
+BGE_SMALL_REVISION = "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a"
 
 
-# ------------------------------------------------------------------ documents
+def article_batches(batch=2000):
+    store, _, _ = paths()
+    for arrow in pq.ParquetFile(store / "articles.parquet").iter_batches(batch_size=batch):
+        yield pl.from_arrow(arrow)
 
-def documents(limit: int | None = None, truncate: int | None = None) -> pl.DataFrame:
-    """One row per article, with its structured context folded into the text."""
-    mesh = (pl.scan_parquet(f"{STORE}/mesh_headings.parquet")
-            .group_by("pmid").agg(pl.col("descriptor_name").str.join("; ").alias("mesh")))
-    subs = (pl.scan_parquet(f"{STORE}/substances.parquet")
-            .group_by("pmid").agg(pl.col("substance_name").str.join("; ").alias("subs")))
-    lf = (pl.scan_parquet(f"{STORE}/articles.parquet")
-          .filter(pl.col("abstract").is_not_null())
-          .join(pl.scan_parquet(f"{STORE}/journals.parquet").select("nlm_id", "medline_ta"),
-                on="nlm_id", how="left")
-          .join(mesh, on="pmid", how="left").join(subs, on="pmid", how="left")
-          .with_columns(
-              pl.concat_str([
-                  pl.col("medline_ta").fill_null(""), pl.lit(" ("),
-                  pl.col("pub_year").cast(pl.Utf8).fill_null("n.d."), pl.lit("). "),
-                  pl.col("title").fill_null(""), pl.lit("\n"),
-                  pl.col("mesh").fill_null(""), pl.lit(" "),
-                  pl.col("subs").fill_null(""), pl.lit("\n"),
-                  pl.col("abstract"),
-              ]).alias("doc"))
-          .select("pmid", "title", "pub_year", "medline_ta", "doc"))
-    if truncate:
-        # bge-* models read at most 512 tokens (~2,000 characters) and discard
-        # the rest. Feeding them more costs tokenizer time for text the model
-        # never sees. Measured: trimming here is pure throughput, not a quality
-        # trade. BM25 indexes the untruncated text, so nothing is lost to
-        # keyword search - only the dense pass sees the cap.
-        lf = lf.with_columns(pl.col("doc").str.slice(0, truncate).alias("doc"))
-    if limit:
+
+def documents(limit=None, truncate=None):
+    """Small benchmark helper; production builds stream batches without truncation."""
+    store, _, _ = paths()
+    lf = pl.scan_parquet(store / "articles.parquet").select("pmid", "title", "abstract", "pub_year")
+    if limit is not None:
         lf = lf.head(limit)
-    return lf.collect()
+    return lf.with_columns(pl.concat_str([pl.col("title").fill_null(""),
+             pl.col("abstract").fill_null("")], separator="\n").alias("doc")).collect()
 
 
-# ------------------------------------------------------------------ bm25
-
-def build_bm25(limit: int | None = None) -> None:
+def build_bm25(limit=None, shard_size=20000):
     import bm25s, Stemmer
-    os.makedirs(INDEX, exist_ok=True)
-    df = documents(limit)
-    t0 = time.time()
-    stemmer = Stemmer.Stemmer("english")
-    tokens = bm25s.tokenize(df["doc"].to_list(), stopwords="en", stemmer=stemmer,
-                            show_progress=False)
-    r = bm25s.BM25()
-    r.index(tokens, show_progress=False)
-    r.save(f"{INDEX}/bm25")
-    df.select("pmid", "title", "pub_year", "medline_ta").write_parquet(f"{INDEX}/docmeta.parquet")
-    el = time.time() - t0
-    print(f"bm25   {df.height:,} docs in {el:.1f}s  ({df.height/el:,.0f} docs/s)  -> {INDEX}/bm25")
+    _, index, cfg = paths()
+    index.mkdir(parents=True, exist_ok=True)
+    with BuildLock(index / "build.lock"):
+        shards, total = [], 0
+        for n, df in enumerate(article_batches(shard_size)):
+            if limit is not None:
+                df = df.head(max(0, limit - total))
+            if not df.height:
+                break
+            df = df.with_columns(pl.concat_str([pl.col("title").fill_null(""),
+                          pl.col("abstract").fill_null("")], separator="\n").alias("doc"))
+            fingerprint = digest([cfg["snapshot"], n, df.height, "title-abstract-v1", shard_size])
+            shard = index / f"lexical-{n:05d}-{fingerprint[:12]}"
+            marker = shard / "ready.json"
+            if not marker.exists() or read_json(marker).get("fingerprint") != fingerprint:
+                space_guard(index)
+                retriever = bm25s.BM25()
+                tokens = bm25s.tokenize(df["doc"].to_list(), stopwords="en",
+                                       stemmer=Stemmer.Stemmer("english"), show_progress=False)
+                if not tokens.vocab:
+                    raise ValueError("No searchable text in lexical shard")
+                retriever.index(tokens, show_progress=False)
+                retriever.save(str(shard))
+                df.select("pmid", "title", "pub_year",
+                          pl.col("abstract").is_not_null().alias("has_abstract")).write_parquet(shard / "meta.parquet")
+                atomic_json(marker, {"fingerprint": fingerprint, "docs": df.height})
+            shards.append(shard.name)
+            total += df.height
+            print(f"Lexical: {total:,} records", flush=True)
+        expected = sum(df.height for df in article_batches())
+        atomic_json(index / "lexical.json", {"snapshot": cfg["snapshot"], "shards": shards,
+                    "docs": total, "expected": expected, "complete": total == expected,
+                    "scoring": "BM25 per-shard statistics; evaluate cross-shard ranking"})
 
 
 class BM25Search:
-    def __init__(self) -> None:
+    def __init__(self):
         import bm25s, Stemmer
-        self.r = bm25s.BM25.load(f"{INDEX}/bm25", load_corpus=False)
+        _, self.index, cfg = paths()
+        self.cfg = read_json(self.index / "lexical.json")
+        if self.cfg["snapshot"] != cfg["snapshot"] or not self.cfg["complete"]:
+            raise RuntimeError("Lexical index is incomplete or from another snapshot")
+        self.module = bm25s
         self.stemmer = Stemmer.Stemmer("english")
-        self.meta = pl.read_parquet(f"{INDEX}/docmeta.parquet")
-        self._bm25s = bm25s
+        # Loading 161 full-corpus shards from disk for every query made repeated
+        # searches unnecessarily expensive. Keep the memory-mapped retriever and
+        # its compact metadata table after the first use in this process.
+        self._loaded = {}
 
-    def search(self, query: str, k: int = 20) -> list[dict]:
-        q = self._bm25s.tokenize(query, stopwords="en", stemmer=self.stemmer,
-                                 show_progress=False)
-        idx, scores = self.r.retrieve(q, k=min(k, self.meta.height), show_progress=False)
+    def close(self):
+        """Release NumPy memory maps, especially important for Windows files."""
+        loaded = getattr(self, "_loaded", {})
+        for retriever, _ in loaded.values():
+            for value in getattr(retriever, "scores", {}).values():
+                mapping = getattr(value, "_mmap", None)
+                if mapping is not None:
+                    mapping.close()
+        loaded.clear()
+
+    def __del__(self):
+        self.close()
+
+    def _load_shard(self, name):
+        cached = self._loaded.get(name)
+        if cached is None:
+            shard = self.index / name
+            # Windows prevents deletion/replacement of active memory maps.
+            # Load arrays normally there; other platforms keep the lower-RAM
+            # memory-mapped path. PUBMED_BM25_MMAP can override either choice.
+            mmap_default = os.name != "nt"
+            mmap = os.environ.get("PUBMED_BM25_MMAP", "1" if mmap_default else "0") == "1"
+            cached = (self.module.BM25.load(str(shard), load_corpus=False, mmap=mmap,
+                                            show_progress=False),
+                      pl.read_parquet(shard / "meta.parquet"))
+            self._loaded[name] = cached
+        return cached
+
+    def warm(self):
+        """Load every lexical shard before the service reports startup complete."""
+        for name in self.cfg["shards"]:
+            self._load_shard(name)
+
+    def search(self, query, k=20, since_year=None, until_year=None, allowed_pmids=None):
         out = []
-        for i, s in zip(idx[0], scores[0]):
-            row = self.meta.row(int(i), named=True)
-            out.append({**row, "score": float(s)})
-        return out
+        tokens = self.module.tokenize([query], stopwords="en", stemmer=self.stemmer,
+                                     return_ids=False, show_progress=False)[0]
+        for name in self.cfg["shards"]:
+            r, meta = self._load_shard(name)
+            mask = np.ones(meta.height, dtype=bool)
+            if since_year is not None:
+                mask &= (meta["pub_year"] >= since_year).fill_null(False).to_numpy()
+            if until_year is not None:
+                mask &= (meta["pub_year"] <= until_year).fill_null(False).to_numpy()
+            if allowed_pmids is not None:
+                mask &= meta["pmid"].is_in(allowed_pmids).to_numpy()
+            scores = r.get_scores(tokens)
+            eligible = np.flatnonzero(mask & (scores > 0))
+            order = eligible[np.argsort(-scores[eligible], kind="stable")[:k]]
+            out.extend({**meta.row(int(i), named=True), "score": float(scores[i])} for i in order)
+        return sorted(out, key=lambda row: (-row["score"], row["pmid"]))[:k]
 
 
-# ------------------------------------------------------------------ vectors
+def token_passages(text, tokenizer, max_tokens, overlap=48):
+    """Use original text offsets, retaining the final section of long abstracts."""
+    if not text:
+        return []
+    offsets = tokenizer(text, add_special_tokens=False, return_offsets_mapping=True,
+                        truncation=False)["offset_mapping"]
+    if max_tokens <= overlap or max_tokens < 1:
+        raise ValueError("Token budget must exceed overlap")
+    chunks = []
+    for start in range(0, len(offsets), max_tokens - overlap):
+        end = min(start + max_tokens, len(offsets))
+        left = 0 if start == 0 else offsets[start][0]
+        right = len(text) if end == len(offsets) else offsets[end][0]
+        chunks.append(text[left:right])
+        if end == len(offsets):
+            break
+    return chunks
 
-def _write_vector_config(model_name: str, tbl_name: str, backend: str, docs: int) -> None:
-    with open(f"{INDEX}/vector_model.json", "w") as fh:
-        json.dump({"model": model_name, "table": tbl_name,
-                   "backend": backend, "docs": docs}, fh)
+
+def lexical_passages(query, row):
+    """Return bounded verbatim windows around query terms, including late matches."""
+    body = row["abstract"] or row["title"] or ""
+    words = list(re.finditer(r"\S+", body))
+    terms = set(re.findall(r"\w+", query.lower()))
+    candidates = []
+    for start in range(0, len(words), 130):
+        end = min(start + 160, len(words))
+        left = 0 if start == 0 else words[start].start()
+        right = len(body) if end == len(words) else words[end].start()
+        passage = body[left:right]
+        score = len(terms & set(re.findall(r"\w+", passage.lower())))
+        candidates.append((score, start, passage))
+        if end == len(words):
+            break
+    candidates.sort(key=lambda p: (-p[0], p[1]))
+    return [{"section": "abstract" if row["abstract"] else "title", "text": p[2],
+             "chunk_id": digest([row["pmid"], p[1], p[2]])} for p in candidates[:2]]
 
 
-def _encoder(model_name: str, backend: str, threads: int | None):
-    """
-    Two CPU backends. Measured on a 4-core i5-1135G7 with bge-small, 300 real
-    docs: fastembed/ONNX 3.7 docs/s at 8 threads, sentence-transformers/torch
-    4.5 docs/s. Torch wins here, so it is the default - but ONNX stays available
-    because that ordering is hardware-specific and worth re-checking on a
-    different box. Neither is close to a GPU; this is the step to rent one for.
-    """
-    if backend == "onnx":
-        from fastembed import TextEmbedding
-        emb = TextEmbedding(model_name=model_name, threads=threads)
-        return lambda texts: [v.tolist() for v in emb.embed(texts)]
-
+def _encoder(model_name, backend="torch", threads=None):
+    if backend != "torch":
+        raise ValueError("Versioned passages currently support the torch backend only")
     import torch
-    torch.set_num_threads(threads or (os.cpu_count() or 4))
     from sentence_transformers import SentenceTransformer
-    m = SentenceTransformer(model_name, device="cpu")
-    return lambda texts: m.encode(texts, batch_size=len(texts),
-                                  show_progress_bar=False,
-                                  normalize_embeddings=True).tolist()
+    torch.set_num_threads(threads or min(4, os.cpu_count() or 4))
+    revision = os.environ.get("PUBMED_EMBED_REVISION")
+    if revision is None and model_name == "BAAI/bge-small-en-v1.5":
+        revision = BGE_SMALL_REVISION
+    return SentenceTransformer(model_name, device=os.environ.get("PUBMED_EMBED_DEVICE", "cpu"),
+                               revision=revision,
+                               local_files_only=os.environ.get("PUBMED_ALLOW_MODEL_DOWNLOAD") != "1")
 
 
-def build_vectors(model_name: str, limit: int | None = None, batch: int = 64,
-                  threads: int | None = None, backend: str = "torch") -> None:
-    """
-    Resumable dense pass. Re-running skips whatever is already embedded, so an
-    interrupted overnight run costs nothing. The model name is stored with the
-    table so a later model swap is a new table, not a silent mismatch.
-
-    The table is written incrementally, so the index is queryable while this is
-    still running - you do not have to wait for the full pass to finish.
-    """
+def build_vectors(model_name, limit=None, batch=32, threads=None, backend="torch", ann=True):
     import lancedb
-
-    df = documents(limit, truncate=2000)
-    db = lancedb.connect(INDEX)
-    tbl_name = "chunks_" + model_name.split("/")[-1].replace(".", "_").replace("-", "_")
-
-    done: set[str] = set()
-    if tbl_name in db.table_names():
-        done = set(db.open_table(tbl_name).to_lance().to_table(columns=["pmid"])
-                   .column("pmid").to_pylist())
-        df = df.filter(~pl.col("pmid").is_in(list(done)))
-        print(f"resuming: {len(done):,} already embedded, {df.height:,} to go")
-    if df.height == 0:
-        # Everything is already embedded. Publish the config here too, or a
-        # watchdog that treats "config exists" as "finished" would restart this
-        # forever against a table that is complete.
-        _write_vector_config(model_name, tbl_name, backend, len(done))
-        print(f"nothing to do - {len(done):,} already embedded, config published")
-        return
-
-    encode = _encoder(model_name, backend, threads)
-    texts, pmids = df["doc"].to_list(), df["pmid"].to_list()
-    t0, n = time.time(), 0
-    tbl = None
-    for start in range(0, len(texts), batch):
-        chunk = texts[start:start + batch]
-        vecs = encode(chunk)
-        rows = [{"pmid": p, "vector": v}
-                for p, v in zip(pmids[start:start + batch], vecs)]
-        if tbl is None and tbl_name not in db.table_names():
-            tbl = db.create_table(tbl_name, rows)
-        else:
-            tbl = tbl or db.open_table(tbl_name)
-            tbl.add(rows)
-        n += len(chunk)
-        # Publishing the config mid-run makes the partial index queryable, but
-        # it also invites a reader to open the LanceDB table while this process
-        # is still appending to it. On Windows that lock collision kills THIS
-        # writer (exit 5, no traceback) and costs hours of work. So it is opt-in
-        # and off by default: finishing the pass matters more than querying it
-        # early. Set PUBMED_PUBLISH_PARTIAL=1 only if no reader will attach.
-        if (os.environ.get("PUBMED_PUBLISH_PARTIAL") == "1"
-                and tbl is not None
-                and not os.path.exists(f"{INDEX}/vector_model.json")):
-            _write_vector_config(model_name, tbl_name, backend, n + len(done))
-        el = time.time() - t0
-        print(f"\r  {n:,}/{len(texts):,}  {n/el:6.1f} docs/s  "
-              f"eta {(len(texts)-n)/max(n/el, 1e-9)/60:5.1f} min", end="", flush=True)
-    el = time.time() - t0
-    print(f"\nvectors  {n:,} docs in {el/60:.1f} min  ({n/el:.1f} docs/s)  -> {tbl_name}")
-    _write_vector_config(model_name, tbl_name, backend, n + len(done))
+    _, index, cfg = paths()
+    if (limit is not None and limit < 1) or batch < 1:
+        raise ValueError("Limits and batches must be positive")
+    index.mkdir(parents=True, exist_ok=True)
+    with BuildLock(index / "build.lock"):
+        model = _encoder(model_name, backend, threads)
+        revision = getattr(model[0].auto_model.config, "_commit_hash", None)
+        if revision is None:
+            raise ValueError("Embedding model must resolve to a pinned hub revision")
+        descriptor = {"snapshot": cfg["snapshot"], "model": model_name, "revision": revision,
+                      "chunk_version": CHUNK_VERSION, "max_tokens": model.max_seq_length,
+                      "batch": batch, "backend": backend, "normalized": True}
+        table_name = "passages_" + digest(descriptor)[:24]
+        db = lancedb.connect(str(index))
+        table = db.open_table(table_name) if table_name in db.table_names() else None
+        marker = index / f"{table_name}.json"
+        state = read_json(marker) if marker.exists() and table else {"batches": {}, "complete": False}
+        processed, expected_chunks = 0, 0
+        total_articles = sum(df.height for df in article_batches())
+        for number, df in enumerate(article_batches(batch)):
+            rows = []
+            for article in df.iter_rows(named=True):
+                sources = [("title", article["title"] or "")]
+                if article["abstract"]:
+                    sources.append(("abstract", article["abstract"]))
+                for section, source in sources:
+                    for part, passage in enumerate(token_passages(source, model.tokenizer, model.max_seq_length - 2)):
+                        key = digest([article["pmid"], section, part, passage, descriptor])
+                        rows.append({"chunk_id": key, "pmid": article["pmid"], "section": section,
+                                     "part": part, "text": passage, "title": article["title"] or "",
+                                     "pub_year": article["pub_year"] or 0, "content_hash": digest(source)})
+            fingerprint = digest([r["chunk_id"] for r in rows])
+            expected_chunks += len(rows)
+            if limit is not None and processed >= limit:
+                continue
+            completed = state["batches"].get(str(number))
+            if not completed or completed["fingerprint"] != fingerprint:
+                space_guard(index)
+                for start in range(0, len(rows), batch):
+                    group = rows[start:start + batch]
+                    vectors = model.encode([r["text"] for r in group], batch_size=batch,
+                                          normalize_embeddings=True, show_progress_bar=False).tolist()
+                    encoded = [{**r, "vector": v} for r, v in zip(group, vectors)]
+                    if table is None:
+                        table = db.create_table(table_name, encoded)
+                    else:
+                        table.merge_insert("chunk_id").when_matched_update_all().when_not_matched_insert_all().execute(encoded)
+                state["batches"][str(number)] = {"fingerprint": fingerprint, "chunks": len(rows), "articles": df.height}
+                atomic_json(marker, state)
+            processed += df.height
+            print(f"Vectors: {processed:,}/{total_articles:,} articles", flush=True)
+        count = table.count_rows() if table else 0
+        state.update({**descriptor, "table": table_name, "docs": count, "expected_chunks": expected_chunks,
+                      "articles": processed, "expected_articles": total_articles,
+                      "complete": processed == total_articles and count == expected_chunks, "ann": False})
+        if state["complete"] and ann and count >= 1024:
+            table.create_index(metric="cosine", index_type="IVF_FLAT",
+                               num_partitions=max(1, int(math.sqrt(count))), replace=True)
+            table.create_scalar_index("pub_year", replace=True)
+            state["ann"] = True
+        atomic_json(marker, state)
+        atomic_json(index / "vector_model.json", {k: v for k, v in state.items() if k != "batches"})
 
 
 class HybridSearch:
-    """BM25 always; vectors when a dense table exists. Fused with RRF."""
-
-    def __init__(self) -> None:
+    def __init__(self, rerank=None):
         self.bm25 = BM25Search()
         self.dense = None
-        cfg_path = f"{INDEX}/vector_model.json"
-        if os.path.exists(cfg_path):
-            try:
+        self.vector_status = "absent"
+        self.dense_error = None
+        self.reranker = None
+        # A verified ANN index is the normal production path. Set this to 0 for
+        # exhaustive audit queries or ANN recall evaluation.
+        self.ann_requested = os.environ.get("PUBMED_USE_ANN", "1") != "0"
+        self.use_ann = False
+        self.store, self.index, self.dataset = paths()
+        path = self.index / "vector_model.json"
+        if path.exists():
+            cfg = read_json(path)
+            self.vector_status = "incomplete"
+            if cfg.get("complete") and cfg.get("snapshot") == self.dataset["snapshot"]:
                 import lancedb
-                cfg = json.load(open(cfg_path))
-                self.tbl = lancedb.connect(INDEX).open_table(cfg["table"])
-                # The query must be encoded by the same backend that built the
-                # table - mixing torch and ONNX gives subtly different vectors.
-                self.encode = _encoder(cfg["model"], cfg.get("backend", "torch"), None)
-                self.dense = cfg["model"]
-            except Exception as e:                       # index absent or model gone
-                print(f"[hybrid] dense disabled: {e}")
+                self.tbl = lancedb.connect(str(self.index)).open_table(cfg["table"])
+                self.use_ann = self.ann_requested and bool(cfg.get("ann"))
+                # A full Lance row count can add more than a minute to cold
+                # startup at this corpus size. Finalization and release checks
+                # verify it once; operators can request the expensive startup
+                # check explicitly when diagnosing an installation.
+                if (os.environ.get("PUBMED_VERIFY_VECTOR_COUNT") == "1" and
+                        self.tbl.count_rows() != cfg["expected_chunks"]):
+                    raise RuntimeError("Vector count does not match committed manifest")
+                try:
+                    self.model = _encoder(cfg["model"], cfg["backend"])
+                    if getattr(self.model[0].auto_model.config, "_commit_hash", None) != cfg["revision"]:
+                        raise RuntimeError("Query encoder revision differs from indexed model")
+                    self.dense = cfg["model"]
+                    self.vector_status = "complete"
+                except (OSError, RuntimeError, ValueError) as error:
+                    self.vector_status = "unavailable"
+                    self.dense_error = str(error)
+        rerank = rerank or os.environ.get("PUBMED_RERANKER")
+        if rerank:
+            from sentence_transformers import CrossEncoder
+            self.reranker = CrossEncoder(rerank, device="cpu")
 
-    def search(self, query: str, k: int = 10, since_year: int | None = None,
-               rrf_k: int = 60) -> dict:
-        pools = {"bm25": self.bm25.search(query, k=k * 5)}
+    def close(self):
+        bm25 = getattr(self, "bm25", None)
+        if bm25 is not None:
+            bm25.close()
+
+    def __del__(self):
+        self.close()
+
+    def _external_passages(self, hits):
+        """Read source text only for returned vector hits, grouped by part file."""
+        grouped = {}
+        for hit in hits:
+            grouped.setdefault(hit["passage_file"], []).append(hit["chunk_id"])
+        found = {}
+        for relative, ids in grouped.items():
+            source = (self.index / relative).resolve()
+            if not source.is_relative_to(self.index.resolve()) or not source.exists():
+                raise RuntimeError("Vector index references an invalid passage file")
+            rows = (pl.scan_parquet(source).filter(pl.col("chunk_id").is_in(ids))
+                    .select("chunk_id", "section", "text").collect())
+            found.update({row["chunk_id"]: row for row in rows.iter_rows(named=True)})
+        return found
+
+    def search(self, query, k=10, since_year=None, rrf_k=60, until_year=None, allowed_pmids=None):
+        if not isinstance(k, int) or not 1 <= k <= 50:
+            raise ValueError("k must be between 1 and 50")
+        if not query.strip() or len(query) > 4000:
+            raise ValueError("Query must contain 1 to 4000 characters")
+        if since_year is not None and until_year is not None and since_year > until_year:
+            raise ValueError("Invalid year range")
+        pools = {"bm25": self.bm25.search(query, k * 5, since_year, until_year, allowed_pmids)}
+        passages = {}
         if self.dense:
-            qv = self.encode([query])[0]
-            hits = self.tbl.search(qv).limit(k * 5).to_list()
-            pools["vector"] = [{"pmid": h["pmid"], "score": 1 - h.get("_distance", 0)}
-                               for h in hits]
-
-        # Reciprocal rank fusion: rank-based, so the two score scales never
-        # need calibrating against each other.
-        fused: dict[str, float] = {}
-        for name, hits in pools.items():
-            for rank, h in enumerate(hits):
-                fused[h["pmid"]] = fused.get(h["pmid"], 0.0) + 1.0 / (rrf_k + rank + 1)
-
-        meta = self.bm25.meta
-        order = sorted(fused.items(), key=lambda x: -x[1])
-        rows = (meta.filter(pl.col("pmid").is_in([p for p, _ in order[:k * 3]]))
-                    .with_columns(pl.col("pmid").replace_strict(fused, default=0.0)
-                                  .alias("score")))
-        if since_year:
-            rows = rows.filter(pl.col("pub_year") >= since_year)
-        rows = rows.sort("score", descending=True).head(k)
-        return {"retrievers": list(pools), "dense_model": self.dense,
-                "results": rows.to_dicts()}
+            query_text = "Represent this sentence for searching relevant passages: " + query if "bge-" in self.dense else query
+            vector = self.model.encode([query_text], normalize_embeddings=True)[0].tolist()
+            search = self.tbl.search(vector).distance_type("cosine")
+            if self.use_ann:
+                search = search.nprobes(int(os.environ.get("PUBMED_ANN_NPROBES", "64")))
+                search = search.refine_factor(int(os.environ.get("PUBMED_ANN_REFINE", "10")))
+            else:
+                search = search.bypass_vector_index()
+            predicates = []
+            if since_year is not None:
+                predicates.append(f"pub_year >= {int(since_year)}")
+            if until_year is not None:
+                predicates.append(f"pub_year > 0 AND pub_year <= {int(until_year)}")
+            if allowed_pmids is not None:
+                if any(not str(p).isdigit() for p in allowed_pmids):
+                    raise ValueError("Invalid PMID filter")
+                predicates.append("pmid IN (" + ",".join("'" + str(p) + "'" for p in allowed_pmids) + ")" if allowed_pmids else "pub_year < 0")
+            if predicates:
+                search = search.where(" AND ".join(predicates), prefilter=True)
+            hits = search.limit(k * 10).to_list()
+            external = self._external_passages(hits) if hits and "passage_file" in hits[0] else None
+            unique = {}
+            for hit in hits:
+                unique.setdefault(hit["pmid"], hit)
+                evidence = external.get(hit["chunk_id"]) if external is not None else {
+                    key: hit[key] for key in ("chunk_id", "section", "text")}
+                if evidence:
+                    passages.setdefault(hit["pmid"], []).append(evidence)
+            pools["vector"] = list(unique.values())
+        fused = {}
+        for hits in pools.values():
+            for rank, hit in enumerate(hits):
+                fused[hit["pmid"]] = fused.get(hit["pmid"], 0) + 1 / (rrf_k + rank + 1)
+        order = sorted(fused, key=lambda p: (-fused[p], p))[:k * 5]
+        records = pl.scan_parquet(self.store / "articles.parquet").filter(pl.col("pmid").is_in(order)).collect().to_dicts()
+        results = []
+        for row in records:
+            evidence = passages.get(row["pmid"], [])[:2] or lexical_passages(query, row)
+            results.append({"pmid": row["pmid"], "title": row["title"], "pub_year": row["pub_year"],
+                "score": fused[row["pmid"]], "has_abstract": bool(row["abstract"]), "evidence": evidence,
+                "source_member": row.get("source_member"), "url": f"https://pubmed.ncbi.nlm.nih.gov/{row['pmid']}/"})
+        results.sort(key=lambda r: (-r["score"], r["pmid"]))
+        if self.reranker and results:
+            query_tokens = len(self.reranker.tokenizer(query, add_special_tokens=False)["input_ids"])
+            budget = (self.reranker.max_length or 512) - query_tokens - 3
+            if budget <= 48:
+                raise ValueError("Query is too long for the selected reranker")
+            pairs, owners = [], []
+            for n, row in enumerate(results):
+                for evidence in row["evidence"]:
+                    for part in token_passages(evidence["text"], self.reranker.tokenizer, budget):
+                        pairs.append((query, part))
+                        owners.append(n)
+                row["rerank_score"] = float("-inf")
+            for n, score in zip(owners, self.reranker.predict(pairs)):
+                results[n]["rerank_score"] = max(results[n]["rerank_score"], float(score))
+            results.sort(key=lambda r: -r["rerank_score"])
+        return {"retrievers": list(pools), "dense_model": self.dense, "vector_status": self.vector_status,
+                "dense_error": self.dense_error,
+                "snapshot": self.dataset["snapshot"], "filters": {"since_year": since_year, "until_year": until_year},
+                "ann": self.use_ann, "exact": bool(self.dense and not self.use_ann), "results": results[:k],
+                "caveat": "Ranked evidence from selected files, not a corpus total. Title-only records provide no abstract findings."}
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["bm25", "vectors", "search", "benchmark"])
-    ap.add_argument("--query", default="cisplatin resistance in ovarian cancer")
+    ap.add_argument("cmd", choices=["bm25", "vectors", "search"])
+    ap.add_argument("--dataset")
     ap.add_argument("--model", default="BAAI/bge-small-en-v1.5")
+    ap.add_argument("--query", default="cisplatin resistance")
     ap.add_argument("--limit", type=int)
-    ap.add_argument("--k", type=int, default=8)
-    ap.add_argument("--threads", type=int)
-    ap.add_argument("--backend", choices=["torch", "onnx"], default="torch")
+    ap.add_argument("--batch", type=int, default=32)
+    ap.add_argument("--threads", type=int, default=4)
+    ap.add_argument("--backend", default="torch")
     a = ap.parse_args()
-
+    if a.dataset:
+        os.environ["PUBMED_DATASET"] = a.dataset
     if a.cmd == "bm25":
         build_bm25(a.limit)
     elif a.cmd == "vectors":
-        build_vectors(a.model, a.limit, threads=a.threads, backend=a.backend)
-    elif a.cmd == "benchmark":
-        # Run this on YOUR laptop before committing to a corpus size.
-        from fastembed import TextEmbedding
-        docs = documents(400)["doc"].to_list()
-        for m in ["BAAI/bge-small-en-v1.5", "BAAI/bge-base-en-v1.5"]:
-            e = TextEmbedding(model_name=m, threads=a.threads)
-            list(e.embed(docs[:8]))
-            t0 = time.time(); list(e.embed(docs)); el = time.time() - t0
-            r = len(docs) / el
-            print(f"{m:26s} {r:6.1f} docs/s | 23k docs -> {23362/r/60:5.1f} min "
-                  f"| 1M -> {1e6/r/3600:5.1f} h")
+        build_vectors(a.model, a.limit, a.batch, a.threads, a.backend)
     else:
-        print(json.dumps(HybridSearch().search(a.query, a.k), indent=2)[:2500])
+        print(json.dumps(HybridSearch().search(a.query), indent=2))

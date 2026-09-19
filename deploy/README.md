@@ -6,13 +6,13 @@ colorTo: green
 sdk: docker
 app_port: 7860
 pinned: false
-short_description: Exact answers over 277,042 biomedical papers
+short_description: Evidence-grounded search over 3.2 million PubMed records
 ---
 
 # PubMed Literature Intelligence
 
-Ask in plain English about 277,042 biomedical papers and get **exact, citable**
-answers.
+Search 3,217,739 supplied PubMed records, inspect the source behind each result,
+and ask for evidence-grounded explanations.
 
 ```
 "heart attack"  →  280 journals · 226 drugs · 6,313 researchers
@@ -38,11 +38,10 @@ inventing an answer.
 
 ## What is inside
 
-- **277,042** unique articles from 20 PubMed baseline files
-- **238,224** abstracts embedded with `BAAI/bge-small-en-v1.5`
-- **3,085,368** citation edges recovered from reference lists
-- **128,288** concepts + **267,012** MeSH synonyms, so "heart attack" finds
-  *Myocardial Infarction* and its narrower terms
+- **3,217,739** supplied PubMed records from the selected 159-file snapshot
+- **6,290,649** searchable passages embedded with `BAAI/bge-small-en-v1.5`
+- Structured tables for journals, authors, citations, MeSH concepts and trials
+- Hybrid BM25 and vector retrieval over the same immutable snapshot
 
 ## Known limits
 
@@ -64,7 +63,8 @@ inventing an answer.
 | `PUBMED_LLM=cloud` | enables the Ask tab |
 | `PUBMED_API_KEY` | key for the OpenAI-compatible endpoint |
 | `PUBMED_API_BASE` | e.g. `https://api.groq.com/openai/v1` |
-| `PUBMED_CLOUD_MODEL` | e.g. `openai/gpt-oss-120b` |
+| `PUBMED_CLOUD_MODEL` | `openai/gpt-oss-120b` for the recommended Groq setup |
+| `PUBMED_ALLOW_CLOUD=1` | explicit consent to send questions and selected passages to the endpoint |
 
-Without the LLM variables the Ask tab is disabled; the other six tabs work
+Without the LLM variables the Ask tab is disabled; the other research views work
 normally, since none of them use a language model.

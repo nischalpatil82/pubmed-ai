@@ -1,5 +1,9 @@
 # Local, no-SQL build — runbook
 
+This is the historical single-file runbook. For the current `covid-files`
+dataset, use [IMPLEMENTATION.md](IMPLEMENTATION.md); its manifest-aware commands
+replace the legacy build and launch commands below.
+
 No database server. No SQL. Everything runs on your laptop CPU.
 Verified end to end on `pubmed26n1443.xml.gz` (23,362 articles).
 

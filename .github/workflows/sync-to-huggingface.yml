@@ -1,9 +1,20 @@
-name: Deploy to Hugging Face Space
+name: Publish application to a selected Space
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      space_repo:
+        description: 'Separate destination Space (owner/name)'
+        required: true
+        type: string
+      data_repo:
+        description: 'Dataset repository (owner/name)'
+        required: true
+        type: string
+      data_revision:
+        description: 'Immutable 40-character dataset commit'
+        required: true
+        type: string
 
 jobs:
   deploy:
@@ -15,7 +26,15 @@ jobs:
           python-version: "3.11"
       - name: Install deployment dependency
         run: python -m pip install --upgrade huggingface_hub
-      - name: Upload application to the existing Space
+      - name: Upload application to the selected Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: python deploy/upload.py --user Nischalpatil --only space --reuse
+          PUBMED_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          PUBMED_LLM: cloud
+          PUBMED_ALLOW_CLOUD: '1'
+          PUBMED_API_BASE: https://api.groq.com/openai/v1
+          PUBMED_CLOUD_MODEL: openai/gpt-oss-120b
+          TARGET_SPACE: ${{ inputs.space_repo }}
+          DATA_REPO: ${{ inputs.data_repo }}
+          DATA_REVISION: ${{ inputs.data_revision }}
+        run: python deploy/upload.py --space-repo "$TARGET_SPACE" --data-repo "$DATA_REPO" --data-revision "$DATA_REVISION"

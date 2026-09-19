@@ -5,8 +5,7 @@ FROM python:3.11-slim
 RUN useradd -m -u 1000 user
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH \
-    PUBMED_STORE=/home/user/data/store \
-    PUBMED_INDEX=/home/user/data/index \
+    PUBMED_DATASET=/home/user/data/dataset.json \
     HF_HOME=/home/user/.cache/huggingface \
     PYTHONUNBUFFERED=1
 
@@ -28,6 +27,7 @@ USER user
 EXPOSE 7860
 
 # fetch_data.py pulls the prebuilt store/ and index/ from the dataset repo.
-# Nothing is embedded here - the 238,224 vectors were computed once and travel
-# as files. A cold start is a ~931 MB download, not 15 hours of GPU-less work.
+# Nothing is embedded here: this selected release contains 6,290,649 vectors
+# and is about 18.66 GB. Cold-start duration depends on Space storage, cache
+# state and network throughput; it never recomputes embeddings on the Space.
 CMD ["sh", "-c", "python fetch_data.py && python pipeline/app.py --host 0.0.0.0 --port 7860"]

@@ -31,7 +31,8 @@ def open_any(p):
 def load(desc_path: str, out_dir: str) -> None:
     syn_rows, tree_rows = [], []
     with open_any(desc_path) as fh:
-        ctx = etree.iterparse(fh, events=("end",), tag="DescriptorRecord")
+        ctx = etree.iterparse(fh, events=("end",), tag="DescriptorRecord",
+                              load_dtd=False, no_network=True, resolve_entities=False)
         for _, rec in ctx:
             ui = rec.findtext("DescriptorUI")
             name = rec.findtext("DescriptorName/String")
@@ -74,7 +75,7 @@ def descendants(concept_id: str, store: str = "./store") -> list[str]:
         return [concept_id]
     expr = pl.lit(False)
     for r in roots:
-        expr = expr | pl.col("tree_number").str.starts_with(r)
+        expr = expr | (pl.col("tree_number") == r) | pl.col("tree_number").str.starts_with(r + ".")
     return (tree.filter(expr).select("concept_id").unique()
                 .collect()["concept_id"].to_list())
 

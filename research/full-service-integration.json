@@ -1,0 +1,196 @@
+{
+  "health": {
+    "ok": true,
+    "dataset": {
+      "dataset_id": "covid-files",
+      "snapshot": "6f269c0288fb98ea0c96",
+      "status": "ready",
+      "store": "stores\\6f269c0288fb98ea0c96",
+      "index": "indexes\\6f269c0288fb98ea0c96",
+      "pilot": false
+    },
+    "search_ready": true
+  },
+  "stats": {
+    "articles": 3217739,
+    "with_abstract": 2835880,
+    "without_abstract": 381859,
+    "dataset": {
+      "dataset_id": "covid-files",
+      "snapshot": "6f269c0288fb98ea0c96",
+      "status": "ready",
+      "store": "stores\\6f269c0288fb98ea0c96",
+      "index": "indexes\\6f269c0288fb98ea0c96",
+      "pilot": false
+    },
+    "coverage_note": "Selected source records only; not complete PubMed or full-text coverage. Author identities are provisional.",
+    "journals": 14098,
+    "authorship_rows": 21231442,
+    "authors": 7600560,
+    "concepts": 2171080,
+    "year_range": [
+      1820,
+      2027
+    ],
+    "year_core": [
+      2019,
+      2025
+    ],
+    "year_core_pct": 95,
+    "retrievers": [
+      "bm25",
+      "vector"
+    ],
+    "dense_model": "BAAI/bge-small-en-v1.5",
+    "search_error": null
+  },
+  "search": {
+    "retrievers": [
+      "bm25",
+      "vector"
+    ],
+    "dense_model": "BAAI/bge-small-en-v1.5",
+    "vector_status": "complete",
+    "dense_error": null,
+    "snapshot": "6f269c0288fb98ea0c96",
+    "filters": {
+      "since_year": 2020,
+      "until_year": null
+    },
+    "ann": true,
+    "exact": false,
+    "results": [
+      {
+        "pmid": "35947580",
+        "title": "Factor structure of the diabetes knowledge questionnaire and the assessment of the knowledge of risk factors, causes, complications, and management of diabetes mellitus: A national population-based study in Singapore.",
+        "pub_year": 2022,
+        "score": 0.02402745995423341,
+        "has_abstract": true,
+        "evidence": [
+          {
+            "chunk_id": "db20a6d8a78289ab442be8015fa981b57766433a0826966bb7f17a8fa3edbc9b",
+            "section": "abstract",
+            "text": "This study evaluated the knowledge of diabetes mellitus and predictors of the level of diabetes knowledge among the general public of Singapore. Confirmatory factor analysis and exploratory factor analysis were used to evaluate the fit of different factor models for the diabetes knowledge questionnaire. Multiple linear regressions were performed to determine the sociodemographic characteristics associated with diabetes knowledge. The final factor model identified three domains for diabetes knowledge: general knowledge, diabetes specific knowledge and causes of diabetes, and complications of untreated diabetes. Overall knowledge scores were 23.8 \u00b1 2.4 for general diabetes knowledge, 2.3 \u00b1 0.8 for diabetes specific knowledge, 2.3 \u00b1 1.2 for causes, and 5.2 \u00b1 1.2 for complications of untreated diabetes. Patients with diabetes were more knowledgeable than adults without diabetes in the population. While the general public in Singapore has adequate knowledge of diabetes, misconceptions were identified in both groups which underscores the need to tailor specific educational initiatives to reduce these diabetes knowledge gaps."
+          }
+        ],
+        "source_member": "pubmed25n1148.xml",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/35947580/",
+        "snippet": "This study evaluated the knowledge of diabetes mellitus and predictors of the level of diabetes knowledge among the general public of Singapore. Confirmatory factor analysis and exploratory factor analysis were used to evaluate the fit of different factor models for the diabetes knowledge questionnaire. Multiple linear\u2026",
+        "doi": "10.1371/journal.pone.0272745",
+        "journal": "PLoS One"
+      },
+      {
+        "pmid": "33706754",
+        "title": "Quality of diabetes care in patients with schizophrenia: a case-control study in Qatar.",
+        "pub_year": 2021,
+        "score": 0.01639344262295082,
+        "has_abstract": true,
+        "evidence": [
+          {
+            "section": "abstract",
+            "text": "BACKGROUND: Patients with schizophrenia are at least twice as likely to develop diabetes mellitus compared to the general population. This is of significance in Qatar given the high prevalence of obesity and diabetes. Furthermore, the lifespan of people with schizophrenia is shortened by approximately 15\u2009years, partly due to long-term microvascular and macrovascular complications. High quality diabetes care can significantly reduce morbidity and mortality. We assessed the level of diabetes care delivered to patients in Qatar with schizophrenia and diabetes compared to those with diabetes alone. METHODS: We performed a retrospective chart review of patients with diabetes mellitus with (n\u2009=\u200973) and without (n\u2009=\u200973) schizophrenia. Demographic information and electronic medical records were reviewed to determine adherence to American Diabetes Association standards of diabetes care in the last 6 and 12\u2009months. Optimal diabetes care was defined as having completed glycated hemoglobin (HbA1c), lipid profile and retinal examination within 12\u2009months. RESULTS: Optimal diabetes care was significantly lower ",
+            "chunk_id": "e742daa7fa9955d84de4d5fe6c907762effd587f9359652a5fa5865d0a50e6c4"
+          },
+          {
+            "section": "abstract",
+            "text": "6 and 12\u2009months. Optimal diabetes care was defined as having completed glycated hemoglobin (HbA1c), lipid profile and retinal examination within 12\u2009months. RESULTS: Optimal diabetes care was significantly lower in patients with schizophrenia and diabetes compared to diabetes alone [26.0% (n\u2009=\u200919/73) vs 52.1% (n\u2009=\u200938/73), p\u2009=\u20090.002]. Patients with diabetes and schizophrenia were also significantly less likely to have had body mass index recorded within 6 months (p\u2009=\u20090.008) and HbA1c (p\u2009=\u20090.006), lipid profile (p\u2009=\u20090.015), estimated glomerular filtration rate (eGFR) (p\u2009=\u20090.001) and order for retinal examination (p\u2009=\u20090.004) over 12\u2009months. After adjusting for multiple comparisons, only assessment of eGFR (p\u2009=\u20090.01) and order for retinal examination (p\u2009=\u20090.04) remained significant. CONCLUSION: Patients in Qatar\u00a0with schizophrenia and diabetes, receive sub-optimal diabetes care compared to those with diabetes alone.",
+            "chunk_id": "3f0a6955c6f7d72ce8c2c86041108067be776fcffb575e9f33df79f4f6e18636"
+          }
+        ],
+        "source_member": "pubmed25n1075.xml",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/33706754/",
+        "snippet": "BACKGROUND: Patients with schizophrenia are at least twice as likely to develop diabetes mellitus compared to the general population. This is of significance in Qatar given the high prevalence of obesity and diabetes. Furthermore, the lifespan of people with schizophrenia is shortened by approximately 15\u2009years, partly \u2026",
+        "doi": "10.1186/s12888-021-03121-5",
+        "journal": "BMC Psychiatry"
+      },
+      {
+        "pmid": "36539127",
+        "title": "PREVALENCE OF COGNITIVE IMPAIRMENT AND ITS ASSOCIATED FACTORS AMONG TYPE 2DIABETIC PATIENTS: FINDING FROM A CROSS SECTIONAL STUDY IN IRAQ.",
+        "pub_year": 2022,
+        "score": 0.01639344262295082,
+        "has_abstract": true,
+        "evidence": [
+          {
+            "chunk_id": "7d549cfea992bdc0476906248c94065edfd42b64638858a6241acc960d31453c",
+            "section": "abstract",
+            "text": "Diabetes mellitus is a metabolic condition characterized by chronic hyperglycemia and disturbance in body metabolic state. It is estimated that nearly half of patients with diabetes will suffer from cognitive impairment and impairment in the performance of daily functions. The aim was to determine the prevalence of cognitive impairment and its predictors among diabetics. A cross-sectional study was conducted on type 2 diabetic patients attending the AL-Wafaa clinic in Mosul. A validated questionnaire Saint Louis University Mental Status Examination (SLUMS) was used to evaluate cognitive function. The recent value of FBS or RBS and HbA1c were attained from the patient's records. The result demonstrated that 90% had impaired cognitive function. No significant correlation between cognitive function and age, BMI, HbA1c, duration of diabetes, and duration of co-morbid disease. Significant correlation between cognitive function and RBS level. Significant differences were found between cognitive function and gender, smoking, educational level, employment, and monthly income. While no significant differences were found with the marital state. The differences between SLUMS scores and the type of medications used for diabetes also were examined and no significant differences were found. Decline cognitive performance is common among diabetic patients, more than half had a cognitive function. It is associated with gender, smoking, educational level, employment, and monthly income. No association was reported with age, HbA1c, duration of diabetes, and medication used for diabetes."
+          }
+        ],
+        "source_member": "pubmed25n1168.xml",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/36539127/",
+        "snippet": "Diabetes mellitus is a metabolic condition characterized by chronic hyperglycemia and disturbance in body metabolic state. It is estimated that nearly half of patients with diabetes will suffer from cognitive impairment and impairment in the performance of daily functions. The aim was to determine the prevalence of cog\u2026",
+        "doi": null,
+        "journal": "Georgian Med News"
+      },
+      {
+        "pmid": "33709113",
+        "title": "Tea consumption and long-term risk of type 2 diabetes and diabetic complications: a cohort study of 0.5 million Chinese adults.",
+        "pub_year": 2021,
+        "score": 0.016129032258064516,
+        "has_abstract": true,
+        "evidence": [
+          {
+            "section": "abstract",
+            "text": "BACKGROUND: Evidence from epidemiological studies remains inconsistent or limited about the associations of tea consumption with incident diabetes and risk of diabetic complications and death among patients with diabetes. OBJECTIVES: We aimed to investigate the associations of tea consumption with long-term risk of developing type 2 diabetes (T2D) and risks of diabetic complications and death among patients with diabetes. METHODS: This study included 482,425 diabetes-free participants and 30,300 patients with diabetes aged 30-79 y at study enrollment from the China Kadoorie Biobank. Tea consumption information was collected at baseline by interviewer-administered questionnaires. Incidences of diabetes, diabetic complications, and death were identified by linkages to the National Health Insurance system, disease registries, and death registries. Cox proportional hazard regression models were used to estimate HRs and 95% CIs. RESULTS: The mean \u00b1 SD age of participants free of diabetes was 51.2 \u00b1 10.5 y and 41% were male. The mean \u00b1 SD age of patients with diabetes was 58.2 \u00b1 9.6 ",
+            "chunk_id": "1f691a0021c00bcdc95ee873b994b6face3c66dfc769d429d452f1ac6b3bbf1c"
+          },
+          {
+            "section": "abstract",
+            "text": "\u00b1 SD age of participants free of diabetes was 51.2 \u00b1 10.5 y and 41% were male. The mean \u00b1 SD age of patients with diabetes was 58.2 \u00b1 9.6 y and 39% were male. Of all daily tea consumers, 85.8% preferred green tea. In the diabetes-free population, 17,434 participants developed incident T2D during 11.1\u2009y of follow-up. Compared with participants who never consumed tea in the past year, the HR (95% CI) of T2D for daily consumers was 0.92 (0.88, 0.97). In patients with diabetes, we identified 6572 deaths, 12,677 diabetic macrovascular cases, and 2441 diabetic microvascular cases during follow-up. Compared with patients who never consumed tea in the past year, the HRs (95% CIs) of all-cause mortality and risk of microvascular complications for daily consumers were 0.90 (0.83, 0.97) and 0.88 (0.78, 1.00), respectively. Tea consumption was not associated with risk of macrovascular complications among patients with diabetes. With regard to tea consumed, the inverse associations between daily ",
+            "chunk_id": "f0e721dd6cad5c1ce44db7e5bb9660cc7b5ca8debc5dc53224de4e54a4418a43"
+          }
+        ],
+        "source_member": "pubmed25n1075.xml",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/33709113/",
+        "snippet": "BACKGROUND: Evidence from epidemiological studies remains inconsistent or limited about the associations of tea consumption with incident diabetes and risk of diabetic complications and death among patients with diabetes. OBJECTIVES: We aimed to investigate the associations of tea consumption with long-term risk of dev\u2026",
+        "doi": "10.1093/ajcn/nqab006",
+        "journal": "Am J Clin Nutr"
+      },
+      {
+        "pmid": "39218351",
+        "title": "Smoking and diabetes.",
+        "pub_year": 2024,
+        "score": 0.016129032258064516,
+        "has_abstract": true,
+        "evidence": [
+          {
+            "chunk_id": "b0846c84ef1513479192d6fecfadaa4cd123ae6c6339e06d7d735555f95416c7",
+            "section": "title",
+            "text": "Smoking and diabetes."
+          }
+        ],
+        "source_member": "pubmed25n1256.xml",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/39218351/",
+        "snippet": "Smoking increases insulin resistance via multiple mechanisms but is a poorly understood risk factor for onset of type-2 diabetes. It is also associated with impaired beta-cell function in humans, but again the mechanisms are poorly understood. Mechanistic studies of the impact of smoking on carbohydrate metabolism main\u2026",
+        "doi": "10.1016/j.ando.2024.08.001",
+        "journal": "Ann Endocrinol (Paris)"
+      }
+    ],
+    "caveat": "Ranked evidence from selected files, not a corpus total. Title-only records provide no abstract findings.",
+    "ms": 6726
+  },
+  "direct_answer": {
+    "answer": "Articles: 3,217,739\nWith abstract: 2,835,880\nWithout abstract: 381,859\nCoverage note: Selected source records only; not complete PubMed or full-text coverage. Author identities are provisional.\nJournals: 14,098\nAuthorship rows: 21,231,442\nAuthors: 7,600,560\nConcepts: 2,171,080\nYear core pct: 95\nDense model: BAAI/bge-small-en-v1.5\nSelected source records only; not complete PubMed or full-text coverage. Author identities are provisional.",
+    "refused": false,
+    "calls": [
+      {
+        "tool": "corpus_stats",
+        "args": {}
+      }
+    ],
+    "model": "qwen2.5:7b",
+    "provider": "ollama",
+    "snapshot": "6f269c0288fb98ea0c96",
+    "filters": {},
+    "disclosures": [
+      "Selected source records only; not complete PubMed or full-text coverage. Author identities are provisional."
+    ],
+    "usage": {
+      "model_calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0
+    },
+    "ms": 0
+  },
+  "provider_called": false
+}

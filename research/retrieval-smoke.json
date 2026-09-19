@@ -1,0 +1,145 @@
+{
+  "snapshot": "47c83a9c970e3c66286a",
+  "mode": "retrieval",
+  "reranker": null,
+  "queries": 8,
+  "rows": [
+    {
+      "id": "smoke-diabetes",
+      "retrieval_ms": 1833.061500103213,
+      "pmids": [
+        "39822457",
+        "33470340",
+        "31759066",
+        "31749048",
+        "37356446",
+        "31733638",
+        "39822317",
+        "31744428",
+        "38014673",
+        "36183869"
+      ],
+      "recall_at_10": null,
+      "reciprocal_rank": null
+    },
+    {
+      "id": "smoke-vaccine",
+      "retrieval_ms": 1311.8899000110105,
+      "pmids": [
+        "31734699",
+        "31738632",
+        "31749143",
+        "31740498",
+        "31740500",
+        "39566218",
+        "40684304",
+        "38650361",
+        "35305895",
+        "39822416"
+      ],
+      "recall_at_10": null,
+      "reciprocal_rank": null
+    },
+    {
+      "id": "smoke-stroke",
+      "retrieval_ms": 1591.4349000668153,
+      "pmids": [
+        "31753145",
+        "35820867",
+        "31751455",
+        "38627913",
+        "31754878",
+        "31740211",
+        "40499646",
+        "31758035",
+        "39674556",
+        "31744716"
+      ],
+      "recall_at_10": null,
+      "reciprocal_rank": null
+    },
+    {
+      "id": "smoke-cancer",
+      "retrieval_ms": 1463.9136000769213,
+      "pmids": [
+        "39822080",
+        "31760582",
+        "31742490",
+        "31756128",
+        "31748926",
+        "31735999",
+        "40703211",
+        "31738796",
+        "38914833",
+        "31756919"
+      ],
+      "recall_at_10": null,
+      "reciprocal_rank": null
+    },
+    {
+      "id": "smoke-resistance",
+      "retrieval_ms": 1234.7558999899775,
+      "pmids": [
+        "31740560",
+        "31756008",
+        "40708192",
+        "31754463",
+        "31746727",
+        "31741728",
+        "31731508",
+        "39276731",
+        "31744260",
+        "31744181"
+      ],
+      "recall_at_10": null,
+      "reciprocal_rank": null
+    },
+    {
+      "id": "smoke-renal",
+      "retrieval_ms": 1019.018999999389,
+      "pmids": [
+        "40582935",
+        "25199997",
+        "31732212",
+        "31759451",
+        "39825248",
+        "40581565",
+        "39643100",
+        "40549268",
+        "31736957",
+        "31737684"
+      ],
+      "recall_at_10": null,
+      "reciprocal_rank": null
+    },
+    {
+      "id": "smoke-insulin",
+      "retrieval_ms": 991.1838000407442,
+      "pmids": [
+        "31735767",
+        "25723719",
+        "39985646",
+        "31758872",
+        "31756973",
+        "31755075",
+        "31740001",
+        "31740442",
+        "40661538",
+        "31742126"
+      ],
+      "recall_at_10": null,
+      "reciprocal_rank": null
+    },
+    {
+      "id": "smoke-empty",
+      "retrieval_ms": 699.1038999985904,
+      "pmids": [],
+      "recall_at_10": null,
+      "reciprocal_rank": null
+    }
+  ],
+  "mean_recall_at_10": null,
+  "p50_ms": 1273.322900000494,
+  "p95_ms": 1748.4921900904735,
+  "limitations": "Single-process sequential timing. Not a concurrency, clinical-accuracy or provider-cost certification."
+}

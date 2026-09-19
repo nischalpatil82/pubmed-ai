@@ -1,0 +1,8 @@
+{"id":"smoke-diabetes","query":"diabetes","filters":{"since_year":2020}}
+{"id":"smoke-vaccine","query":"vaccine safety"}
+{"id":"smoke-stroke","query":"stroke prevention"}
+{"id":"smoke-cancer","query":"cancer treatment"}
+{"id":"smoke-resistance","query":"antibiotic resistance"}
+{"id":"smoke-renal","query":"renal function"}
+{"id":"smoke-insulin","query":"insulin secretion"}
+{"id":"smoke-empty","query":"zzzzunfindablewordzzzz"}

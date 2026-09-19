@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-PubMed baseline/update XML -> flat CSVs ready for Postgres COPY.
+`PubMed XML, gzipped XML, or ZIP archives -> flat CSVs for the fact-store build.
 
-Streams one .xml.gz at a time with lxml.iterparse so memory stays flat
-regardless of file size. Emits one CSV per table into --out.
+Streams XML elements without extracting ZIP archives. Emits one CSV per table
+and source member into --out. Use a separate output folder for each dataset.
 
 Usage:
     python pubmed_ingest.py --src /data/pubmed --out /data/csv --workers 8
@@ -17,6 +17,8 @@ import glob
 import gzip
 import os
 import sys
+import zipfile
+from contextlib import contextmanager
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from lxml import etree
@@ -89,16 +91,15 @@ def abstract_text(article):
 
 def author_key(last, fore, initials, orcid):
     """
-    Provisional identity key. ORCID when present (authoritative, ~52% of
-    records). Otherwise surname + first initial, which over-merges common
-    names on purpose - stage 3 (entity resolution) splits them back apart
-    using affiliation, MeSH profile and co-author overlap.
+    Provisional identity key. Prefer a supplied ORCID; otherwise use surname
+    and the available full forename/initials. Names alone do not identify a
+    unique person; no automatic disambiguation is claimed.
     """
     if orcid:
         return "orcid:" + orcid
     if not last:
         return None
-    ini = (initials or fore or "")[:1]
+    ini = (fore or initials or "").strip()
     return f"name:{last.lower()}|{ini.lower()}"
 
 
@@ -138,7 +139,7 @@ def handle_article(node, w, seen_journals, seen_authors):
         ])
 
     ids = {a.get("IdType"): (a.text or "").strip()
-           for a in node.findall(".//ArticleIdList/ArticleId")}
+           for a in node.findall("PubmedData/ArticleIdList/ArticleId")}
 
     w["articles"].writerow([
         pmid,
@@ -249,8 +250,50 @@ def handle_article(node, w, seen_journals, seen_authors):
 
 # ---------------------------------------------------------------- per file
 
-def process_file(path, out_dir):
-    stem = os.path.basename(path).split(".")[0]
+@contextmanager
+def open_source(path, member=None):
+    """Read an XML source without extracting ZIP members onto the disk."""
+    if member is not None:
+        with zipfile.ZipFile(path) as archive, archive.open(member) as fh:
+            if member.lower().endswith(".gz"):
+                with gzip.GzipFile(fileobj=fh) as xml:
+                    yield xml
+            else:
+                yield fh
+    else:
+        opener = gzip.open if path.lower().endswith(".gz") else open
+        with opener(path, "rb") as fh:
+            yield fh
+
+
+def source_jobs(src, max_files=None):
+    """Return deterministic source order; reject ambiguous output filenames."""
+    if os.path.isfile(src):
+        if src.lower().endswith(".zip"):
+            with zipfile.ZipFile(src) as archive:
+                jobs = [(src, item.filename) for item in archive.infolist()
+                        if not item.is_dir()
+                        and item.filename.lower().endswith((".xml", ".xml.gz"))]
+        elif src.lower().endswith((".xml", ".xml.gz")):
+            jobs = [(src, None)]
+        else:
+            raise ValueError("source must be .xml, .xml.gz, .zip, or an XML directory")
+    else:
+        jobs = [(path, None) for path in glob.glob(os.path.join(src, "*"))
+                if os.path.isfile(path) and path.lower().endswith((".xml", ".xml.gz"))]
+    jobs.sort(key=lambda job: (job[1] or job[0]).replace("\\", "/"))
+    stems = set()
+    for path, member in jobs:
+        stem = os.path.basename((member or path).replace("\\", "/")).split(".")[0]
+        if stem.lower() in stems:
+            raise ValueError(f"duplicate source stem would overwrite output: {stem}")
+        stems.add(stem.lower())
+    return jobs[:max_files] if max_files else jobs
+
+
+def process_file(path, out_dir, member=None):
+    label = member or path
+    stem = os.path.basename(label.replace("\\", "/")).split(".")[0]
     handles, w = {}, {}
     for t in TABLES:
         f = open(os.path.join(out_dir, f"{t}__{stem}.csv"), "w",
@@ -261,9 +304,10 @@ def process_file(path, out_dir):
     seen_journals, seen_authors = set(), set()
     n = 0
     try:
-        with gzip.open(path, "rb") as fh:
+        with open_source(path, member) as fh:
             ctx = etree.iterparse(fh, events=("end",),
-                                  tag=("PubmedArticle", "DeleteCitation"))
+                                  tag=("PubmedArticle", "DeleteCitation"),
+                                  load_dtd=False, no_network=True, resolve_entities=False)
             for _, el in ctx:
                 if el.tag == "DeleteCitation":
                     for p in el.findall("PMID"):
@@ -277,38 +321,41 @@ def process_file(path, out_dir):
     finally:
         for f in handles.values():
             f.close()
-    return path, n
+    return label, n
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--src", required=True, help="a .xml.gz file or a directory of them")
+    ap.add_argument("--src", required=True, help=".xml, .xml.gz, .zip, or a directory of XML files")
     ap.add_argument("--out", required=True)
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
+    ap.add_argument("--max-files", type=int,
+                    help="process only the first N XML members (useful for a pilot)")
     args = ap.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
-    files = ([args.src] if args.src.endswith(".gz")
-             else sorted(glob.glob(os.path.join(args.src, "*.xml.gz"))))
-    if not files:
-        sys.exit(f"no .xml.gz found under {args.src}")
+    if args.max_files is not None and args.max_files < 1:
+        sys.exit("--max-files must be positive")
+    jobs = source_jobs(args.src, args.max_files)
+    if not jobs:
+        sys.exit(f"no XML records found under {args.src}")
 
     csv.field_size_limit(10 * 1024 * 1024)
     total = 0
-    if args.workers > 1 and len(files) > 1:
+    if args.workers > 1 and len(jobs) > 1:
         with ProcessPoolExecutor(max_workers=args.workers) as ex:
-            futs = [ex.submit(process_file, f, args.out) for f in files]
+            futs = [ex.submit(process_file, path, args.out, member) for path, member in jobs]
             for fut in as_completed(futs):
                 p, n = fut.result()
                 total += n
                 print(f"  {os.path.basename(p):28s} {n:>7,} articles", flush=True)
     else:
-        for f in files:
-            p, n = process_file(f, args.out)
+        for path, member in jobs:
+            p, n = process_file(path, args.out, member)
             total += n
             print(f"  {os.path.basename(p):28s} {n:>7,} articles", flush=True)
 
-    print(f"\n{total:,} articles from {len(files)} file(s) -> {args.out}")
+    print(f"\n{total:,} articles from {len(jobs)} file(s) -> {args.out}")
 
 
 if __name__ == "__main__":

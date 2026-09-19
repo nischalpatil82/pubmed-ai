@@ -8,6 +8,23 @@ store/
 index/
 logs/
 *.csv
+covid-files-pilot/
+covid-files/
+colab/*.zip
+kaggle/*.zip
+kaggle/*.log
+kaggle/*.log.*
+kaggle/*.pid
+kaggle/*.eml
+kaggle/current-kernel/
+kaggle/downloads/
+kaggle/full-run/
+kaggle/remote-check/
+kaggle/smoke-download/
+kaggle/smoke-test/
 
 __pycache__/
 *.pyc
+
+# 12ui improve kits: candidates, captures and targets are not source
+.improve/

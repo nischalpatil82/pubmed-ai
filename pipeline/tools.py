@@ -6,21 +6,22 @@ Design rule: the model NEVER writes a query. It picks a function and fills in
 typed arguments. Everything the user sees as a number comes back from one of
 these functions, computed exactly over the whole corpus by Polars.
 
-Why that matters beyond safety: when SQL arrives later, only the bodies below
-change. The tool schemas, the agent, the prompts and the evaluation set all
-stay exactly as they are. That is what makes "no SQL now, SQL later" cost
-nothing instead of being a rewrite.
+Typed tool arguments keep question planning separate from deterministic
+Parquet/Polars calculations. No SQL database is used or planned by this change.
 """
 from __future__ import annotations
 
 import functools
 import os
 import re
+import threading
 from typing import Any
 
 import polars as pl
 
-STORE = os.environ.get("PUBMED_STORE", "./store")
+from dataset import paths, read_json
+
+STORE, INDEX, DATASET = paths()
 
 
 def _t(name: str) -> pl.LazyFrame:
@@ -35,6 +36,16 @@ def _vocab() -> pl.DataFrame:
 
 
 _COLS = ["name_lc", "concept_id", "concept_name", "kind", "code", "n_papers"]
+
+
+# These are related but distinct MeSH concepts.  They are deliberately kept
+# separate from synonyms: COVID-19 is the disease and SARS-CoV-2 is the virus.
+# Presenting the paired concept makes a search for either term discoverable
+# without silently changing the user's selected scope to the other concept.
+_RELATED_CONCEPTS = {
+    "D000086382": ("D000086402",),  # COVID-19 -> SARS-CoV-2
+    "D000086402": ("D000086382",),  # SARS-CoV-2 -> COVID-19
+}
 
 
 @functools.lru_cache(maxsize=1)
@@ -101,7 +112,7 @@ def resolve_concept(text: str, limit: int = 5) -> list[dict]:
             seen_v.add(cand)
             queries.append(cand)
 
-    # Rank on corpus coverage weighted by match quality, NOT on match tier
+    # Match quality precedes frequency; corpus popularity must not change meaning.
     # alone. Tier-first ranking put "heart attack" - an author keyword on 5
     # papers - above the MeSH concept Myocardial Infarction on 614, because the
     # synonym that matched was the plural "heart attacks" and so fell one tier
@@ -117,14 +128,47 @@ def resolve_concept(text: str, limit: int = 5) -> list[dict]:
                   .when(pl.col("name_lc").str.starts_with(cand)).then(0.6 * penalty)
                   .otherwise(0.3 * penalty))
         frames.append(v.filter(pl.col("name_lc").str.contains(cand, literal=True))
-                       .with_columns((pl.col("n_papers").fill_null(0) * tier).alias("_score")))
+                       .with_columns(tier.alias("_score")))
     if not frames:
         return []
     out = (pl.concat(frames)
-            .sort("_score", descending=True)
+            .sort(["_score", "n_papers"], descending=True)
             .unique(subset=["concept_id"], keep="first", maintain_order=True)
             .head(limit))
     return out.select("concept_id", "concept_name", "kind", "code", "n_papers").to_dicts()
+
+
+def related_concepts(concept_ids: list[str], limit: int = 3) -> list[dict]:
+    """Return curated, in-corpus concepts related to already resolved terms.
+
+    This is for discovery only.  Each returned row remains its own selectable
+    scope, so a user can deliberately choose COVID-19 or SARS-CoV-2 rather
+    than receiving an unexpected combined count.
+    """
+    wanted = []
+    seen = set(concept_ids)
+    parents: dict[str, str] = {}
+    for concept_id in concept_ids:
+        for related_id in _RELATED_CONCEPTS.get(concept_id, ()):
+            if related_id not in seen and related_id not in wanted:
+                wanted.append(related_id)
+                parents[related_id] = concept_id
+
+    if not wanted:
+        return []
+    rows = (_vocab().filter(pl.col("concept_id").is_in(wanted))
+                    .select("concept_id", "concept_name", "kind", "code", "n_papers")
+                    .to_dicts())
+    by_id = {row["concept_id"]: row for row in rows}
+    out = []
+    for related_id in wanted:
+        row = by_id.get(related_id)
+        if row:
+            out.append({**row, "kind": f"related {row['kind']}",
+                        "related_to": parents[related_id]})
+        if len(out) >= limit:
+            break
+    return out
 
 
 @functools.lru_cache(maxsize=1)
@@ -186,7 +230,7 @@ def _descendants(concept_id: str) -> tuple[str, ...]:
         return (concept_id,)
     expr = pl.lit(False)
     for r in roots:
-        expr = expr | pl.col("tree_number").str.starts_with(r)
+        expr = expr | (pl.col("tree_number") == r) | pl.col("tree_number").str.starts_with(r + ".")
     ids = tree.filter(expr).select("concept_id").unique().collect()["concept_id"].to_list()
     return tuple(sorted(set(ids) | {concept_id}))
 
@@ -208,24 +252,52 @@ def _pmids_for(concept_id: str, expand: bool = True) -> pl.LazyFrame:
     ids = list(_descendants(concept_id)) if expand else [concept_id]
     mesh = _t("mesh_headings").filter(pl.col("descriptor_ui").is_in(ids)).select("pmid")
     sub = _t("substances").filter(pl.col("substance_ui").is_in(ids)).select("pmid")
-    return pl.concat([mesh, sub]).unique()
+    names = _lookup().filter(pl.col("concept_id").is_in(ids))["name_lc"].unique().to_list()
+    keywords = (_t("keywords").filter(pl.col("term").str.strip_chars().str.to_lowercase().is_in(names))
+                .select("pmid"))
+    return pl.concat([mesh, sub, keywords]).unique()
 
 
 def concept_scope(concept_id: str, expand: bool = True) -> dict:
     """What a scoped query actually covered - report this, never assume it."""
     ids = _descendants(concept_id) if expand else (concept_id,)
     return {"concept_id": concept_id, "expanded": expand and len(ids) > 1,
-            "descriptors_included": len(ids)}
+            "descriptors_included": len(ids), "match_fields": ["MeSH", "substances", "equivalent author keywords"]}
+
+
+def validate_years(since_year=None, until_year=None):
+    """Validate inclusive publication-year bounds for every query path."""
+    for value in (since_year, until_year):
+        if value is not None and (type(value) is not int or not 1000 <= value <= 3000):
+            raise ValueError("Years must be integers between 1000 and 3000")
+    if since_year is not None and until_year is not None and since_year > until_year:
+        raise ValueError("since_year must not exceed until_year")
 
 
 def _scoped(concept_id: str | None, since_year: int | None,
-            expand: bool = True) -> pl.LazyFrame:
+            expand: bool = True, until_year: int | None = None) -> pl.LazyFrame:
+    validate_years(since_year, until_year)
     arts = _t("articles")
     if concept_id:
         arts = arts.join(_pmids_for(concept_id, expand), on="pmid", how="inner")
-    if since_year:
+    if since_year is not None:
         arts = arts.filter(pl.col("pub_year") >= since_year)
+    if until_year is not None:
+        arts = arts.filter(pl.col("pub_year") <= until_year)
     return arts
+
+
+# Parallel full-corpus analytics can multiply peak allocations. Serialize these
+# collections and request streaming execution to reduce memory pressure.
+# Streaming is not a memory cap: joins, groups and results may still be large.
+# This lock is process-local; it does not coordinate multiple server workers.
+_ANALYTICS_LOCK = threading.Lock()
+
+
+def _collect_heavy(lf: pl.LazyFrame) -> pl.DataFrame:
+    """Serialize participating collections; request lower-memory execution."""
+    with _ANALYTICS_LOCK:
+        return lf.collect(engine="streaming")
 
 
 # ------------------------------------------------------------------ tools
@@ -296,7 +368,8 @@ def _coerce_concept(concept_id: str | None):
 
 
 def list_journals(concept_id: str | None = None, since_year: int | None = None,
-                  limit: int = 25, expand: bool = True) -> dict:
+                  limit: int = 25, expand: bool = True,
+                  until_year: int | None = None) -> dict:
     """Every journal publishing on a concept, with exact paper counts."""
     concept_id, note, err = _coerce_concept(concept_id)
     if err:
@@ -313,13 +386,13 @@ def list_journals(concept_id: str | None = None, since_year: int | None = None,
     jrn = (_t("journals")
            .select("nlm_id", "medline_ta", "country",
                    pl.col("title").alias("journal_title")))
-    res = (_scoped(concept_id, since_year, expand)
+    res = (_scoped(concept_id, since_year, expand, until_year=until_year)
            .join(jrn, on="nlm_id", how="left")
            .group_by("medline_ta", "country")
            .agg(pl.col("pmid").n_unique().alias("papers"),
                 pl.col("journal_title").drop_nulls().first())
            .sort("papers", descending=True))
-    full = res.collect()
+    full = _collect_heavy(res)
     return {"total_journals": full.height,
             "total_papers": int(full["papers"].sum()),
             "scope": concept_scope(concept_id, expand) if concept_id else None,
@@ -328,7 +401,8 @@ def list_journals(concept_id: str | None = None, since_year: int | None = None,
 
 
 def list_drugs(concept_id: str | None = None, since_year: int | None = None,
-               limit: int = 25, named_only: bool = True, expand: bool = True) -> dict:
+               limit: int = 25, named_only: bool = True, expand: bool = True,
+               until_year: int | None = None) -> dict:
     """
     Substances studied within a scope, with UNII/CAS registry numbers.
     named_only drops MeSH class terms ('Antioxidants') that carry no registry
@@ -337,7 +411,7 @@ def list_drugs(concept_id: str | None = None, since_year: int | None = None,
     concept_id, note, err = _coerce_concept(concept_id)
     if err:
         return {"error": err, "total_substances": 0, "results": []}
-    scope = _scoped(concept_id, since_year, expand).select("pmid")
+    scope = _scoped(concept_id, since_year, expand, until_year=until_year).select("pmid")
     res = (_t("substances").join(scope, on="pmid", how="inner"))
     if named_only:
         res = res.filter((pl.col("registry_number").is_not_null())
@@ -347,7 +421,7 @@ def list_drugs(concept_id: str | None = None, since_year: int | None = None,
     res = (res.group_by("substance_name", "registry_number", "substance_ui")
               .agg(pl.col("pmid").n_unique().alias("papers"))
               .sort("papers", descending=True))
-    full = res.collect()
+    full = _collect_heavy(res)
     return {"total_substances": full.height,
             "scope": concept_scope(concept_id, expand) if concept_id else None,
             "note": note,
@@ -365,7 +439,7 @@ def _max_year() -> int:
     should never be able to switch off a feature, so take a high percentile
     instead: outliers cannot move it, real coverage can.
     """
-    yr = _t("articles").select("pub_year").collect()["pub_year"].drop_nulls()
+    yr = _collect_heavy(_t("articles").select("pub_year"))["pub_year"].drop_nulls()
     if not yr.len():
         return 2026
     return int(yr.quantile(0.99))
@@ -383,7 +457,8 @@ def _recent_cutoff(recent_since: int | None) -> int:
 def rank_kols(concept_id: str | None = None, country: str | None = None,
               since_year: int | None = None, limit: int = 20,
               w_first: float = 1.5, w_last: float = 2.0, w_recent: float = 1.0,
-              expand: bool = True, recent_since: int | None = None) -> dict:
+              expand: bool = True, recent_since: int | None = None,
+              until_year: int | None = None) -> dict:
     """
     Rank researchers by a transparent, tunable score.
     Weights are arguments, not constants - the client will want to argue with
@@ -392,7 +467,7 @@ def rank_kols(concept_id: str | None = None, country: str | None = None,
     concept_id, note, err = _coerce_concept(concept_id)
     if err:
         return {"error": err, "total_authors": 0, "results": []}
-    scope = _scoped(concept_id, since_year, expand).select("pmid", "pub_year")
+    scope = _scoped(concept_id, since_year, expand, until_year=until_year).select("pmid", "pub_year")
     a = (_t("authorships").join(scope, on="pmid", how="inner")
          .join(_t("authors").filter(~pl.col("is_group")), on="author_key", how="inner"))
     if country:
@@ -412,13 +487,13 @@ def rank_kols(concept_id: str | None = None, country: str | None = None,
                            + pl.col("senior_author") * w_last
                            + pl.col("recent") * w_recent).alias("kol_score"))
             .sort("kol_score", descending=True))
-    full = res.collect()
+    full = _collect_heavy(res)
     rows = full.head(limit).to_dicts()
     # Honesty check surfaced with the answer, not buried in a log.
     warn = None
     if rows and any(not r["orcid"] for r in rows):
-        warn = ("Authors without an ORCID are matched on surname + initial and may "
-                "merge distinct people. Treat unranked names as provisional.")
+        warn = ("Authors without an ORCID are matched using the available name and may "
+                "merge distinct people or split one person. Treat researcher identities as provisional.")
     return {"total_authors": full.height, "results": rows,
             "scope": concept_scope(concept_id, expand) if concept_id else None,
             "note": note, "caveat": warn}
@@ -428,7 +503,7 @@ def rank_kols(concept_id: str | None = None, country: str | None = None,
 def list_papers(concept_id: str | None = None, journal: str | None = None,
                 substance_ui: str | None = None, author_key: str | None = None,
                 since_year: int | None = None, limit: int = 50,
-                expand: bool = True) -> dict:
+                expand: bool = True, until_year: int | None = None) -> dict:
     """
     The papers behind a number. Every count in this system is a set of real
     articles, so every count should be openable - otherwise the user is asked
@@ -440,7 +515,7 @@ def list_papers(concept_id: str | None = None, journal: str | None = None,
     if err:
         return {"error": err, "total": 0, "results": []}
 
-    lf = _scoped(concept_id, since_year, expand).join(
+    lf = _scoped(concept_id, since_year, expand, until_year=until_year).join(
         _t("journals").select("nlm_id", "medline_ta"), on="nlm_id", how="left")
 
     if journal:
@@ -455,7 +530,7 @@ def list_papers(concept_id: str | None = None, journal: str | None = None,
     res = (lf.select("pmid", "title", "abstract", "pub_year",
                      pl.col("medline_ta").alias("journal"), "doi")
              .sort("pub_year", descending=True))
-    full = res.collect()
+    full = _collect_heavy(res)
     rows = full.head(limit).to_dicts()
     for r in rows:
         ab = r.pop("abstract", None) or ""
@@ -523,12 +598,16 @@ def article_detail(pmid: str) -> dict:
             "cited_by_in_corpus": cited_by, "references_in_corpus": refs}
 
 
-def corpus_stats() -> dict:
+@functools.lru_cache(maxsize=1)
+def _cached_corpus_stats() -> dict:
     """What is actually loaded. Call this when asked about coverage or scope."""
-    arts = _t("articles").collect()
+    arts = _t("articles").select("pmid", "pub_year", pl.col("abstract").is_not_null().alias("has_abstract")).collect()
     yr = arts["pub_year"].drop_nulls()
     return {"articles": arts.height,
-            "with_abstract": int(arts["abstract"].is_not_null().sum()),
+            "with_abstract": int(arts["has_abstract"].sum()),
+            "without_abstract": int((~arts["has_abstract"]).sum()),
+            "dataset": DATASET,
+            "coverage_note": "Selected source records only; not complete PubMed or full-text coverage. Author identities are provisional.",
             "journals": _t("journals").collect().height,
             # Two different numbers that are easy to confuse, so report both.
             # authorship_rows counts one row per author PER PAPER (7.2x articles);
@@ -547,14 +626,24 @@ def corpus_stats() -> dict:
             "year_core_pct": 95}
 
 
-def get_articles(pmids: list[str]) -> dict:
-    """Fetch specific records so an answer can quote and cite them."""
-    res = (_t("articles").filter(pl.col("pmid").is_in(pmids))
+def corpus_stats() -> dict:
+    """Return a fresh top-level mapping so API annotations cannot alter the cache."""
+    return dict(_cached_corpus_stats())
+
+
+def get_articles(pmids: list[str], concept_id: str | None = None,
+                 since_year: int | None = None, until_year: int | None = None) -> dict:
+    """Fetch specific records within the concept and inclusive year scope."""
+    concept_id, note, err = _coerce_concept(concept_id)
+    if err:
+        return {"error": err, "results": []}
+    res = (_scoped(concept_id, since_year, until_year=until_year)
+           .filter(pl.col("pmid").is_in(pmids))
            .join(_t("journals"), on="nlm_id", how="left")
            .select("pmid", "title", "abstract", "pub_year",
                    pl.col("medline_ta").alias("journal"), "doi")
            .collect())
-    return {"results": res.to_dicts()}
+    return {"note": note, "results": res.to_dicts()}
 
 
 
@@ -566,46 +655,47 @@ def get_articles(pmids: list[str]) -> dict:
 # bigger model. Each function below turns a question people actually ask into
 # an exact aggregation.
 
-def trend_by_year(concept_id: str | None = None, since_year: int | None = None) -> dict:
+def trend_by_year(concept_id: str | None = None, since_year: int | None = None,
+                  until_year: int | None = None) -> dict:
     """Papers per year for a concept. Use for 'is research on X growing', trends."""
     concept_id, note, err = _coerce_concept(concept_id)
     if err:
         return {"error": err, "results": []}
-    res = (_scoped(concept_id, since_year)
+    res = (_scoped(concept_id, since_year, until_year=until_year)
            .filter(pl.col("pub_year").is_not_null())
            .group_by("pub_year").agg(pl.col("pmid").n_unique().alias("papers"))
            .sort("pub_year"))
-    full = res.collect()
+    full = _collect_heavy(res)
     return {"total_papers": int(full["papers"].sum()) if full.height else 0,
             "note": note,
             "results": full.to_dicts()}
 
 
 def list_countries(concept_id: str | None = None, since_year: int | None = None,
-                   limit: int = 25) -> dict:
+                   limit: int = 25, until_year: int | None = None) -> dict:
     """Which countries publish on a concept. Counts distinct papers, not authors."""
     concept_id, note, err = _coerce_concept(concept_id)
     if err:
         return {"error": err, "results": []}
-    scope = _scoped(concept_id, since_year).select("pmid")
+    scope = _scoped(concept_id, since_year, until_year=until_year).select("pmid")
     res = (_t("authorships").join(scope, on="pmid", how="inner")
            .filter(pl.col("country").is_not_null() & (pl.col("country") != ""))
            .group_by("country").agg(pl.col("pmid").n_unique().alias("papers"))
            .sort("papers", descending=True))
-    full = res.collect()
+    full = _collect_heavy(res)
     return {"total_countries": full.height, "note": note,
             "caveat": ("Country is parsed from the affiliation's last comma-separated "
-                       "segment - roughly 90% accurate, not a curated field."),
+                       "segment; its accuracy has not been validated on this dataset."),
             "results": full.head(limit).to_dicts()}
 
 
 def list_institutions(concept_id: str | None = None, since_year: int | None = None,
-                      limit: int = 25) -> dict:
+                      limit: int = 25, until_year: int | None = None) -> dict:
     """Which institutions publish on a concept, from author affiliations."""
     concept_id, note, err = _coerce_concept(concept_id)
     if err:
         return {"error": err, "results": []}
-    scope = _scoped(concept_id, since_year).select("pmid")
+    scope = _scoped(concept_id, since_year, until_year=until_year).select("pmid")
     # Affiliations are free text. Take the first segment naming an organisation;
     # crude, but transparent and good enough to rank the big centres.
     org = (pl.col("affiliation").str.split(",").list.eval(
@@ -618,7 +708,7 @@ def list_institutions(concept_id: str | None = None, since_year: int | None = No
            .filter(pl.col("institution").is_not_null())
            .group_by("institution").agg(pl.col("pmid").n_unique().alias("papers"))
            .sort("papers", descending=True))
-    full = res.collect()
+    full = _collect_heavy(res)
     return {"total_institutions": full.height, "note": note,
             "caveat": ("Institution is extracted from free-text affiliation strings "
                        "and is not normalised - the same centre may appear twice."),
@@ -626,7 +716,7 @@ def list_institutions(concept_id: str | None = None, since_year: int | None = No
 
 
 def top_cited(concept_id: str | None = None, since_year: int | None = None,
-              limit: int = 20) -> dict:
+              limit: int = 20, until_year: int | None = None) -> dict:
     """
     Most-cited papers on a concept, counted WITHIN this corpus.
 
@@ -636,7 +726,7 @@ def top_cited(concept_id: str | None = None, since_year: int | None = None,
     concept_id, note, err = _coerce_concept(concept_id)
     if err:
         return {"error": err, "results": []}
-    scope = _scoped(concept_id, since_year).select("pmid")
+    scope = _scoped(concept_id, since_year, until_year=until_year).select("pmid")
     cited = (_t("citations")
              .join(scope.rename({"pmid": "cited_pmid"}), on="cited_pmid", how="inner")
              .group_by("cited_pmid").agg(pl.len().alias("times_cited"))
@@ -647,63 +737,69 @@ def top_cited(concept_id: str | None = None, since_year: int | None = None,
                 .select(pl.col("cited_pmid").alias("pmid"), "title", "pub_year",
                         pl.col("medline_ta").alias("journal"), "times_cited")
                 .sort("times_cited", descending=True))
-    full = res.collect()
+    full = _collect_heavy(res)
     return {"note": note,
             "caveat": ("Counts citations from papers inside this corpus only. A "
-                       "landmark paper cited mostly by work outside these 20 files "
+                       "landmark paper cited mostly by work outside the selected files "
                        "will score low."),
             "results": full.to_dicts()}
 
 
 def list_study_types(concept_id: str | None = None, since_year: int | None = None,
-                     limit: int = 20) -> dict:
+                     limit: int = 20, until_year: int | None = None) -> dict:
     """Breakdown by publication type - trials, reviews, meta-analyses, case reports."""
     concept_id, note, err = _coerce_concept(concept_id)
     if err:
         return {"error": err, "results": []}
-    scope = _scoped(concept_id, since_year).select("pmid")
+    scope = _scoped(concept_id, since_year, until_year=until_year).select("pmid")
     res = (_t("publication_types").join(scope, on="pmid", how="inner")
            .group_by("type_name").agg(pl.col("pmid").n_unique().alias("papers"))
            .sort("papers", descending=True))
-    full = res.collect()
+    full = _collect_heavy(res)
     return {"total_types": full.height, "note": note,
             "results": full.head(limit).to_dicts()}
 
 
 def find_trials(concept_id: str | None = None, since_year: int | None = None,
-                limit: int = 25) -> dict:
+                limit: int = 25, until_year: int | None = None) -> dict:
     """Papers linked to a registered clinical trial, with the NCT number."""
     concept_id, note, err = _coerce_concept(concept_id)
     if err:
         return {"error": err, "results": []}
-    scope = _scoped(concept_id, since_year).select("pmid")
-    res = (_t("databank_links").join(scope, on="pmid", how="inner")
+    scope = _scoped(concept_id, since_year, until_year=until_year).select("pmid")
+    res = (_t("databank_links").filter(pl.col("accession").str.contains(r"^NCT\d{8}$"))
+           .join(scope, on="pmid", how="inner")
            .join(_t("articles"), on="pmid", how="left")
            .select("pmid", "databank", "accession", "title", "pub_year")
            .sort("pub_year", descending=True))
-    full = res.collect()
+    full = _collect_heavy(res)
     return {"total_links": full.height, "note": note,
-            "caveat": ("Only 1.7% of PubMed records carry a trial registry link. "
+            "caveat": ("Only explicitly recorded NCT links are included. "
                        "This is not a substitute for the ClinicalTrials.gov corpus."),
             "results": full.head(limit).to_dicts()}
 
 
 def compare_concepts(concept_a: str, concept_b: str,
-                     since_year: int | None = None) -> dict:
-    """How two topics compare in volume, and how much they overlap."""
+                     since_year: int | None = None, until_year: int | None = None) -> dict:
+    """How two topics compare in volume, without materializing PMID sets in Python."""
     a_id, a_note, a_err = _coerce_concept(concept_a)
     b_id, b_note, b_err = _coerce_concept(concept_b)
     if a_err or b_err:
         return {"error": a_err or b_err}
-    a = set(_scoped(a_id, since_year).select("pmid").collect()["pmid"].to_list())
-    b = set(_scoped(b_id, since_year).select("pmid").collect()["pmid"].to_list())
-    both = a & b
+    # A broad MeSH term can contain millions of papers. Keep each PMID set in
+    # Polars and ask the query engine for the three counts, rather than copying
+    # all identifiers into Python sets at once.
+    a = _scoped(a_id, since_year, until_year=until_year).select("pmid").unique()
+    b = _scoped(b_id, since_year, until_year=until_year).select("pmid").unique()
+    a_count = _collect_heavy(a.select(pl.len().alias("count"))).item()
+    b_count = _collect_heavy(b.select(pl.len().alias("count"))).item()
+    both_count = _collect_heavy(a.join(b, on="pmid", how="inner").select(pl.len().alias("count"))).item()
     return {"note": " ".join(x for x in (a_note, b_note) if x),
-            "a": {"concept": _concept_name(a_id), "concept_id": a_id, "papers": len(a)},
-            "b": {"concept": _concept_name(b_id), "concept_id": b_id, "papers": len(b)},
-            "overlap_papers": len(both),
-            "overlap_pct_of_a": round(100 * len(both) / len(a), 1) if a else 0,
-            "overlap_pct_of_b": round(100 * len(both) / len(b), 1) if b else 0}
+            "a": {"concept": _concept_name(a_id), "concept_id": a_id, "papers": a_count},
+            "b": {"concept": _concept_name(b_id), "concept_id": b_id, "papers": b_count},
+            "overlap_papers": both_count,
+            "overlap_pct_of_a": round(100 * both_count / a_count, 1) if a_count else 0,
+            "overlap_pct_of_b": round(100 * both_count / b_count, 1) if b_count else 0}
 
 
 # ------------------------------------------------------------------ schemas
@@ -766,8 +862,11 @@ TOOL_SCHEMAS = [
         "parameters": _p()}},
     {"type": "function", "function": {
         "name": "get_articles",
-        "description": "Fetch full records by PMID so they can be quoted and cited.",
-        "parameters": _p(pmids={"type": "array", "items": {"type": "string"}})
+        "description": "Fetch full records by PMID within the concept and inclusive year scope so they can be quoted and cited.",
+        "parameters": _p(pmids={"type": "array", "items": {"type": "string"}},
+                         concept_id=CID_DESC,
+                         since_year={"type": "integer"},
+                         until_year={"type": "integer"})
                       | {"required": ["pmids"]}}},
     {"type": "function", "function": {
         "name": "trend_by_year",
@@ -834,9 +933,17 @@ def _searcher():
     return HybridSearch()
 
 
-def search_literature(query: str, k: int = 8, since_year: int | None = None) -> dict:
+def search_literature(query: str, k: int = 8, since_year: int | None = None,
+                      until_year: int | None = None, concept_id: str | None = None) -> dict:
     """Hybrid BM25 + dense search. Open questions only - never counting."""
-    return _searcher().search(query, k=k, since_year=since_year)
+    allowed = None
+    if concept_id:
+        cid, note, error = _coerce_concept(concept_id)
+        if error:
+            return {"error": error, "results": []}
+        allowed = _pmids_for(cid).collect()["pmid"].to_list()
+    return _searcher().search(query, k=k, since_year=since_year,
+                              until_year=until_year, allowed_pmids=allowed)
 
 
 REGISTRY = {"resolve_concept": resolve_concept, "spot_concepts": spot_concepts,
@@ -850,6 +957,16 @@ REGISTRY = {"resolve_concept": resolve_concept, "spot_concepts": spot_concepts,
             "compare_concepts": compare_concepts, "list_papers": list_papers,
             "article_detail": article_detail}
 
+for _schema in TOOL_SCHEMAS:
+    # Every tool exposing a lower year bound also accepts an inclusive upper bound.
+    _properties = _schema["function"]["parameters"]["properties"]
+    if "since_year" in _properties:
+        _properties["until_year"] = {
+            "type": "integer", "description": "Inclusive upper publication year",
+            "minimum": 1000, "maximum": 3000}
+    if _schema["function"]["name"] == "search_literature":
+        _properties["concept_id"] = CID_DESC
+
 
 def register(name: str, fn) -> None:
     REGISTRY[name] = fn
@@ -859,8 +976,20 @@ def call(name: str, args: dict) -> Any:
     if name not in REGISTRY:
         return {"error": f"unknown tool {name}", "available": sorted(REGISTRY)}
     try:
+        import inspect
+        signature = inspect.signature(REGISTRY[name])
+        signature.bind(**args)
+        validate_years(args.get("since_year"), args.get("until_year"))
+        for key, value in args.items():
+            if key in ("limit", "k") and (type(value) is not int or not 1 <= value <= 100):
+                return {"error": f"{key} must be an integer between 1 and 100"}
+            if isinstance(value, str) and len(value) > 4000:
+                return {"error": "Argument too long"}
+        if name == "get_articles" and (not isinstance(args.get("pmids"), list) or
+            len(args["pmids"]) > 50 or any(not isinstance(p, str) or not p.isdigit() for p in args["pmids"])):
+            return {"error": "Provide at most 50 numeric PMID strings"}
         return REGISTRY[name](**args)
-    except TypeError as e:
+    except (TypeError, ValueError) as e:
         return {"error": f"bad arguments for {name}: {e}"}
 
 

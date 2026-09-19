@@ -17,15 +17,16 @@ from __future__ import annotations
 import os
 import sys
 import time
+import threading
 from typing import Any
 
 # Default the store/index locations before tools.py reads them, so the app
 # runs with no environment set up.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
-os.environ.setdefault("PUBMED_STORE", os.path.join(_ROOT, "store"))
-os.environ.setdefault("PUBMED_INDEX", os.path.join(_ROOT, "index"))
 sys.path.insert(0, _HERE)
+from dataset import pin
+pin()
 
 from fastapi import FastAPI, HTTPException, Query          # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse   # noqa: E402
@@ -39,23 +40,75 @@ STATIC = os.path.join(_HERE, "static")
 
 # --------------------------------------------------------------- retrieval
 
-_search_state: dict[str, Any] = {"engine": None, "error": None, "loaded": False}
+_search_state: dict[str, Any] = {
+    "engine": None, "error": None, "loaded": False, "warmed": False,
+}
+_search_lock = threading.Lock()
 
 
 def _searcher():
-    """
-    Lazy, and never fatal. BM25 alone is a working search engine; the dense
-    table may still be building. The UI shows which retrievers are live rather
-    than pretending the answer is the same either way.
-    """
-    if not _search_state["loaded"]:
-        _search_state["loaded"] = True
-        try:
-            from retrieval import HybridSearch
-            _search_state["engine"] = HybridSearch()
-        except Exception as e:                              # index not built yet
-            _search_state["error"] = f"{type(e).__name__}: {e}"
+    """Load once without making initialization failure fatal to the API."""
+    with _search_lock:
+        if not _search_state["loaded"]:
+            _search_state["warmed"] = False
+            try:
+                _search_state["engine"] = tools._searcher()
+                _search_state["error"] = None
+            except Exception as e:
+                _search_state["error"] = f"{type(e).__name__}: {e}"
+            _search_state["loaded"] = True
     return _search_state["engine"]
+
+
+def _validate_years(since_year: int | None, until_year: int | None):
+    """Reject invalid bounds before invoking a tool or model."""
+    try:
+        tools.validate_years(since_year, until_year)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+
+
+def _readiness() -> dict[str, Any]:
+    """Observe loaded state and the manifest; never load or query a model."""
+    from dataset import paths, read_json
+
+    state = dict(_search_state)
+    eng = state["engine"]
+    cfg = None
+    manifest_ready = False
+    manifest_error = None
+    try:
+        _, index, cfg = paths()
+        lexical = read_json(index / "lexical.json")
+        manifest_ready = (lexical.get("complete") is True
+                          and lexical.get("snapshot") == cfg["snapshot"])
+        if not manifest_ready:
+            manifest_error = "Lexical index is incomplete or from another snapshot"
+    except Exception as e:
+        manifest_error = f"Lexical manifest unavailable: {type(e).__name__}: {e}"
+
+    search_ready = bool(state["loaded"] and eng is not None
+                        and getattr(eng, "bm25", None) is not None
+                        and state["warmed"] and not state["error"]
+                        and manifest_ready)
+    vector_status = getattr(eng, "vector_status", "absent")
+    vector_error = getattr(eng, "dense_error", None)
+    dense_model = getattr(eng, "dense", None)
+    dense_ready = bool(search_ready and dense_model
+                       and vector_status == "complete" and not vector_error)
+    search_error = state["error"] or manifest_error
+    if not search_ready and not search_error:
+        search_error = ("Search engine is not loaded" if eng is None or not state["loaded"]
+                        else "Lexical search has not warmed successfully")
+    return {
+        "ok": search_ready, "dataset": cfg, "search_ready": search_ready,
+        "dense_ready": dense_ready,
+        "retrievers": (["bm25"] + (["vector"] if dense_ready else [])) if search_ready else [],
+        "degraded": search_ready and not dense_ready,
+        "dense_model": dense_model if dense_ready else None,
+        "vector_status": vector_status, "vector_error": vector_error,
+        "search_error": search_error,
+    }
 
 
 def _timed(fn, *a, **kw):
@@ -68,25 +121,30 @@ def _timed(fn, *a, **kw):
 
 @app.on_event("startup")
 def _warm():
-    """
-    Load the search engine before serving anything.
-
-    Lazily loading it meant the first page hit raced the model: /api/stats
-    answered "keyword" while the search that ran a second later used
-    "bm25 + vector". The header and the results disagreed on screen, which
-    looks like a bug in the numbers rather than a loading order.
-    """
-    import threading
-    threading.Thread(target=_searcher, daemon=True).start()
+    """Warm lexical shards; retain failures so health can report unavailability."""
+    _search_state["warmed"] = False
+    engine = _searcher()
+    if engine is not None:
+        try:
+            engine.bm25.warm()
+        except Exception as e:
+            _search_state["error"] = f"{type(e).__name__}: {e}"
+        else:
+            _search_state["error"] = None
+            _search_state["warmed"] = True
 
 
 @app.get("/api/stats")
 def api_stats():
     s = tools.corpus_stats()
-    eng = _searcher()
-    s["retrievers"] = (["bm25"] + (["vector"] if eng and eng.dense else [])) if eng else []
-    s["dense_model"] = eng.dense if eng else None
-    s["search_error"] = _search_state["error"]
+    s.update(_readiness())
+    try:
+        import agent
+        s["llm"] = agent.llm_status()
+    except Exception as e:
+        s["llm"] = {"configured": False, "provider": "unavailable", "model": None,
+                    "privacy": "Answer generation is unavailable.",
+                    "error": f"{type(e).__name__}: {e}"}
     return s
 
 
@@ -113,18 +171,34 @@ def api_resolve(q: str = Query(..., min_length=1)):
         if c["concept_id"] not in merged:
             merged[c["concept_id"]] = {**c, "_w": 1}
 
+    # Literal matching alone cannot infer that a person searching the disease
+    # may also want to inspect its causative virus.  Add only vetted, distinct
+    # related concepts that exist in this snapshot.  They are labelled in the
+    # UI and remain separate selectable scopes.
+    for c in tools.related_concepts(list(merged), limit=3):
+        parent_id = c.pop("related_to")
+        # Keep the concept the user named first, immediately followed by its
+        # curated related concept, before less-specific keyword alternatives.
+        merged[parent_id]["_relationship_rank"] = 2
+        if c["concept_id"] not in merged:
+            merged[c["concept_id"]] = {**c, "_w": 1, "_relationship_rank": 1}
+
     # A multi-word phrase match is precise and stays on top; otherwise the
     # concept with the most coverage wins.
-    out = sorted(merged.values(), key=lambda c: (-c["_w"], -(c.get("n_papers") or 0)))
+    out = sorted(merged.values(), key=lambda c: (-c.get("_relationship_rank", 0), -c["_w"],
+                                                  -(c.get("n_papers") or 0)))
     for c in out:
         c.pop("_w", None)
+        c.pop("_relationship_rank", None)
     return {"query": q, "ms": ms, "concepts": out[:8]}
 
 
 @app.get("/api/journals")
 def api_journals(concept_id: str | None = None, since_year: int | None = None,
-                 limit: int = 30, expand: bool = True):
-    out, ms = _timed(tools.list_journals, concept_id, since_year, limit, expand)
+                 limit: int = 30, expand: bool = True, until_year: int | None = None):
+    _validate_years(since_year, until_year)
+    out, ms = _timed(tools.list_journals, concept_id, since_year, limit, expand,
+                     until_year=until_year)
     out["ms"] = ms
     out["exact"] = True
     return out
@@ -132,8 +206,11 @@ def api_journals(concept_id: str | None = None, since_year: int | None = None,
 
 @app.get("/api/drugs")
 def api_drugs(concept_id: str | None = None, since_year: int | None = None,
-              limit: int = 30, named_only: bool = True, expand: bool = True):
-    out, ms = _timed(tools.list_drugs, concept_id, since_year, limit, named_only, expand)
+              limit: int = 30, named_only: bool = True, expand: bool = True,
+              until_year: int | None = None):
+    _validate_years(since_year, until_year)
+    out, ms = _timed(tools.list_drugs, concept_id, since_year, limit, named_only, expand,
+                     until_year=until_year)
     out["ms"] = ms
     out["exact"] = True
     # Be explicit that the default filter hides class terms without a registry
@@ -147,32 +224,33 @@ def api_drugs(concept_id: str | None = None, since_year: int | None = None,
 
 @app.get("/api/kols")
 def api_kols(concept_id: str | None = None, country: str | None = None,
-             since_year: int | None = None, limit: int = 25, expand: bool = True):
+             since_year: int | None = None, limit: int = 25, expand: bool = True,
+             until_year: int | None = None):
+    _validate_years(since_year, until_year)
     out, ms = _timed(tools.rank_kols, concept_id, country, since_year, limit,
-                     1.5, 2.0, 1.0, expand)
+                     1.5, 2.0, 1.0, expand, until_year=until_year)
     out["ms"] = ms
     out["exact"] = True
     return out
 
 
 @app.get("/api/search")
-def api_search(q: str = Query(..., min_length=2), k: int = 12,
-               since_year: int | None = None):
-    eng = _searcher()
-    if eng is None:
-        # "not built" sends people looking for missing files. Usually the files
-        # are fine and the embedding model is simply still loading, which takes
-        # ~30s after a restart. Say which it is.
-        if _search_state["error"]:
-            raise HTTPException(503, f"Search unavailable: {_search_state['error']}")
-        raise HTTPException(503, "Search is still starting up — the model takes "
-                                 "about 30 seconds to load. Try again in a moment.")
-    out, ms = _timed(eng.search, q, k, since_year)
+def api_search(q: str = Query(..., min_length=2, max_length=4000), k: int = Query(12, ge=1, le=50),
+               since_year: int | None = None, until_year: int | None = None,
+               concept_id: str | None = None):
+    _validate_years(since_year, until_year)
+    status = _readiness()
+    if not status["search_ready"]:
+        raise HTTPException(503, f"Search unavailable: {status['search_error']}")
+    out, ms = _timed(tools.search_literature, q, k, since_year,
+                     until_year=until_year, concept_id=concept_id)
     out["ms"] = ms
     out["exact"] = False          # a ranked sample, never a total
     pmids = [r["pmid"] for r in out.get("results", [])]
     if pmids:
-        full = {a["pmid"]: a for a in tools.get_articles(pmids)["results"]}
+        full = {a["pmid"]: a for a in tools.get_articles(
+            pmids, concept_id=concept_id, since_year=since_year,
+            until_year=until_year)["results"]}
         for r in out["results"]:
             a = full.get(r["pmid"], {})
             abstract = a.get("abstract") or ""
@@ -186,55 +264,70 @@ def api_search(q: str = Query(..., min_length=2), k: int = 12,
 # exists only behind the LLM is a capability most users never find.
 
 @app.get("/api/trend")
-def api_trend(concept_id: str | None = None, since_year: int | None = None):
-    out, ms = _timed(tools.trend_by_year, concept_id, since_year)
+def api_trend(concept_id: str | None = None, since_year: int | None = None,
+              until_year: int | None = None):
+    _validate_years(since_year, until_year)
+    out, ms = _timed(tools.trend_by_year, concept_id, since_year, until_year=until_year)
     out["ms"] = ms; out["exact"] = True
     return out
 
 
 @app.get("/api/countries")
 def api_countries(concept_id: str | None = None, since_year: int | None = None,
-                  limit: int = 30):
-    out, ms = _timed(tools.list_countries, concept_id, since_year, limit)
+                  limit: int = 30, until_year: int | None = None):
+    _validate_years(since_year, until_year)
+    out, ms = _timed(tools.list_countries, concept_id, since_year, limit,
+                     until_year=until_year)
     out["ms"] = ms; out["exact"] = True
     return out
 
 
 @app.get("/api/institutions")
 def api_institutions(concept_id: str | None = None, since_year: int | None = None,
-                     limit: int = 30):
-    out, ms = _timed(tools.list_institutions, concept_id, since_year, limit)
+                     limit: int = 30, until_year: int | None = None):
+    _validate_years(since_year, until_year)
+    out, ms = _timed(tools.list_institutions, concept_id, since_year, limit,
+                     until_year=until_year)
     out["ms"] = ms; out["exact"] = True
     return out
 
 
 @app.get("/api/cited")
 def api_cited(concept_id: str | None = None, since_year: int | None = None,
-              limit: int = 25):
-    out, ms = _timed(tools.top_cited, concept_id, since_year, limit)
+              limit: int = 25, until_year: int | None = None):
+    _validate_years(since_year, until_year)
+    out, ms = _timed(tools.top_cited, concept_id, since_year, limit,
+                     until_year=until_year)
     out["ms"] = ms; out["exact"] = True
     return out
 
 
 @app.get("/api/study_types")
 def api_study_types(concept_id: str | None = None, since_year: int | None = None,
-                    limit: int = 20):
-    out, ms = _timed(tools.list_study_types, concept_id, since_year, limit)
+                    limit: int = 20, until_year: int | None = None):
+    _validate_years(since_year, until_year)
+    out, ms = _timed(tools.list_study_types, concept_id, since_year, limit,
+                     until_year=until_year)
     out["ms"] = ms; out["exact"] = True
     return out
 
 
 @app.get("/api/trials")
 def api_trials(concept_id: str | None = None, since_year: int | None = None,
-               limit: int = 30):
-    out, ms = _timed(tools.find_trials, concept_id, since_year, limit)
+               limit: int = 30, until_year: int | None = None):
+    _validate_years(since_year, until_year)
+    out, ms = _timed(tools.find_trials, concept_id, since_year, limit,
+                     until_year=until_year)
     out["ms"] = ms; out["exact"] = True
     return out
 
 
 @app.get("/api/compare")
-def api_compare(concept_a: str, concept_b: str, since_year: int | None = None):
-    out, ms = _timed(tools.compare_concepts, concept_a, concept_b, since_year)
+def api_compare(concept_a: str, concept_b: str, since_year: int | None = None,
+                until_year: int | None = None):
+    _validate_years(since_year, until_year)
+    out, ms = _timed(tools.compare_concepts, concept_a, concept_b, since_year,
+                     until_year=until_year)
     out["ms"] = ms; out["exact"] = True
     return out
 
@@ -242,16 +335,20 @@ def api_compare(concept_a: str, concept_b: str, since_year: int | None = None):
 @app.get("/api/papers")
 def api_papers(concept_id: str | None = None, journal: str | None = None,
                substance_ui: str | None = None, author_key: str | None = None,
-               since_year: int | None = None, limit: int = 50, expand: bool = True):
+               since_year: int | None = None, limit: int = 50, expand: bool = True,
+               until_year: int | None = None):
+    _validate_years(since_year, until_year)
     out, ms = _timed(tools.list_papers, concept_id, journal, substance_ui,
-                     author_key, since_year, limit, expand)
+                     author_key, since_year, limit, expand, until_year=until_year)
     out["ms"] = ms
     out["exact"] = True
     return out
 
 
 @app.get("/api/ask")
-def api_ask(q: str = Query(..., min_length=3), model: str | None = None):
+def api_ask(q: str = Query(..., min_length=3, max_length=4000), model: str | None = None,
+            concept_id: str | None = None, since_year: int | None = None,
+            until_year: int | None = None):
     """
     Plain-English question -> a written answer over tool results.
 
@@ -260,12 +357,17 @@ def api_ask(q: str = Query(..., min_length=3), model: str | None = None):
     results in under a second. Generating prose is the slowest, least reliable
     part of the system, so it is opt-in.
     """
+    _validate_years(since_year, until_year)
+    filters = {k: v for k, v in (("concept_id", concept_id),
+                                 ("since_year", since_year),
+                                 ("until_year", until_year)) if v is not None}
     try:
         import agent
     except Exception as e:
         raise HTTPException(503, f"agent unavailable: {e}")
     try:
-        out, ms = _timed(agent.run, q, model or agent.MODEL, 6, False)
+        out, ms = _timed(agent.run, q, model or agent.MODEL, 6, False,
+                         filters=filters or None)
     except Exception as e:
         raise HTTPException(503, f"model call failed: {type(e).__name__}: {e}")
     # The trace holds full tool payloads; the page does not need them.
@@ -301,7 +403,8 @@ def index():
 
 @app.get("/health")
 def health():
-    return JSONResponse({"ok": True})
+    status = _readiness()
+    return JSONResponse(status, status_code=200 if status["search_ready"] else 503)
 
 
 if __name__ == "__main__":
@@ -326,7 +429,7 @@ if __name__ == "__main__":
     else:
         sys.exit(f"no free port in {args.port}-{args.port + 11}")
 
-    print(f"store  {os.environ['PUBMED_STORE']}")
-    print(f"index  {os.environ['PUBMED_INDEX']}")
+    print(f"store  {tools.STORE}")
+    print(f"index  {tools.INDEX}")
     print(f"\n  ->  http://{args.host}:{port}\n", flush=True)
     uvicorn.run(app, host=args.host, port=port, log_level="warning")

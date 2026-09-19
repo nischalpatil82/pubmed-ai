@@ -1,0 +1,309 @@
+{
+  "snapshot": "6f269c0288fb98ea0c96",
+  "init_seconds": 57.138,
+  "configuration": {
+    "nprobes": 64,
+    "refine_factor": 10
+  },
+  "rows": [
+    {
+      "id": "cisplatin",
+      "query": "cisplatin resistance in ovarian cancer",
+      "seconds": 29.029,
+      "retrievers": [
+        "bm25",
+        "vector"
+      ],
+      "vector_status": "complete",
+      "ann": true,
+      "exact": false,
+      "results": [
+        {
+          "pmid": "39224110",
+          "title": "Molecular mechanisms of cisplatin resistance in ovarian cancer.",
+          "pub_year": 2024,
+          "score": 0.03252247488101534,
+          "has_abstract": true,
+          "evidence": [
+            {
+              "chunk_id": "dfc1c38db66a7be1b5dd83c836250abb138afb2dbbb3f64bf3efab1f6f177598",
+              "section": "abstract",
+              "text": "Ovarian cancer is one of the most common malignant tumors of the female reproductive system. The majority of patients with advanced ovarian cancer are mainly treated with cisplatin-based chemotherapy. As the most widely used first-line anti-neoplastic drug, cisplatin produces therapeutic effects through multiple mechanisms. However, during clinical treatment, cisplatin resistance has gradually emerged, representing a challenge for patient outcome improvement. The mechanism of cisplatin resistance, while known to be complex and involve many processes, remains unclear. We hope to provide a new direction for pre-clinical and clinical studies through this review on the mechanism of ovarian cancer cisplatin resistance and methods to overcome drug resistance."
+            },
+            {
+              "chunk_id": "85ae9cf59654caea22e7a86cdc16a8339806ee0fefbcdf64d1d3d38f6818d445",
+              "section": "title",
+              "text": "Molecular mechanisms of cisplatin resistance in ovarian cancer."
+            }
+          ],
+          "source_member": "pubmed25n1256.xml",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/39224110/"
+        },
+        {
+          "pmid": "32327705",
+          "title": "Regulation of MYB mediated cisplatin resistance of ovarian cancer cells involves miR-21-wnt signaling axis.",
+          "pub_year": 2020,
+          "score": 0.025833333333333333,
+          "has_abstract": true,
+          "evidence": [
+            {
+              "chunk_id": "5533f5316077ff998252964a80b4d159639b296a5498dacd315fcc9b703e46f3",
+              "section": "abstract",
+              "text": "c-MYB has been reported to be elevated in few cancers, including in ovarian cancer. It influences resistance to cisplatin but the details are not very well understood. The objective of this study was to further evaluate role of c-MYB in ovarian cancer's cisplatin resistance. To elucidate the underlying mechanism of cisplatin resistance in ovarian cancer, we focused on the epigenetic regulation by miRNAs. Two cell lines, ES2 and OVCAR3, were used as the model systems. C-MYB expression was either up-regulated or silenced and the resulting effect on cisplatin resistance evaluated, along with the mechanistic role of miR-21, through transfections with pre/anti-miRNAs. An in vivo cisplatin resistance model was also employed to verify findings. High c-MYB correlated with increased miR-21. High c-MYB also resulted in induction of EMT and increased resistance against cisplatin which was attenuated by anti-miR-200s. c-MYB decreased β-catenin phosphorylation and thus activated wnt signaling. Silencing of c-MYB resulted in reduced miR-21 levels, reduced EMT, reduced cisplatin IC-50s and increased β-catenin phosphorylation. In an in vivo mice model of cisplatin resistance, c-MYB overexpressing ES2 xenografts were more aggressive than their control counterparts. These c-MYB overexpressing ES xenografts were significantly more resistant to cisplatin but could be sensitized to cisplatin by anti-miR-21. Our results provide a novel mechanism of cisplatin resistance by c-MYB which involves an essential role of miR-21."
+            }
+          ],
+          "source_member": "pubmed25n1030.xml",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/32327705/"
+        },
+        {
+          "pmid": "36245227",
+          "title": "SP1-induced lncRNA MCF2L-AS1 promotes cisplatin resistance in ovarian cancer by regulating IGF2BP1/IGF2/MEK/ERK axis.",
+          "pub_year": 2022,
+          "score": 0.025568181818181816,
+          "has_abstract": true,
+          "evidence": [
+            {
+              "chunk_id": "80a32128bcc0f144546017f655b01fdf71c41e41d7272b3245c45debd23501e6",
+              "section": "abstract",
+              "text": "OBJECTIVE: Cisplatin resistance is a huge problem encountered in ovarian cancer treatment. Our study probed the roles and the underlying mechanisms of lncRNA MCF2L-AS1 in ovarian cancer cisplatin-resistance. METHODS: SKOV3 and IGROV-1 cells were subjected to gradually increasing concentrations of cisplatin to construct ovarian cancer cisplatin-resistance cells. Cell proliferation was evaluated by cell counting kit-8 and colony formation assays. Cell apoptosis was assessed using Annexin V and PI staining. The relationships between SP1, MCF2L-AS1 and insulin-like growth factor-2 mRNA binding protein 1 (IGF2BP1) were verified by RNA pull-down, RIP, ChIP and dual-luciferase reporter gene assay, respectively. Tumor xenograft experiment was employed to evaluate the effects of MCF2L-AS1 silencing on ovarian cancer cisplatin-resistance in vivo. TUNEL staining and immunohistochemistry were performed in tumor tissue. RESULTS: MCF2L-AS1 and IGF2BP1 were upregulated in cisplatin-resistant cells. MCF2L-AS1 silencing suppressed cell proliferation of cisplatin-resistant cells, while promoted the apoptosis, suggesting that MCF2L-AS1 knockdown suppressed ovarian cancer cells cisplatin-resistance. Meanwhile, MCF2L-AS1 silencing enhanced cisplatin sensitivity in ovarian cancer parental cells and IGF2BP1 overexpression impaired cisplatin sensitivity of parental cells. MCF2L-AS1 activated IGF2/MEK/ERK pathway through interacting with IGF2BP1. Transcription factor SP1 activated MCF2L-AS1 expression. MCF2L-AS1 knockdown inhibited ovarian cancer cisplatin-resistance in vivo. CONCLUSION: SP1-induced MCF2L-AS1 promoted ovarian cancer cisplatin-resistance through activation of IGF2/MEK/ERK pathway via interacting with IGF2BP1."
+            }
+          ],
+          "source_member": "pubmed25n1509.xml",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/36245227/"
+        },
+        {
+          "pmid": "37144519",
+          "title": "Expression of Ferredoxin1 in cisplatin‑resistant ovarian cancer cells confers their resistance against ferroptosis induced by cisplatin.",
+          "pub_year": 2023,
+          "score": 0.024393871783430016,
+          "has_abstract": true,
+          "evidence": [
+            {
+              "chunk_id": "5485136923a547b7776b522bb99fbd06099c9cd260395ca5e2b5ab753359fc14",
+              "section": "abstract",
+              "text": "Ovarian cancer (OC) is a refractory cancer that shows recurrence due to the acquisition of resistance to anticancer drugs, including cisplatin. However, the molecular mechanism underlying the acquisition of cisplatin resistance by cancer cells remains largely unknown. In the present study, two sets of ovarian endometrioid carcinoma cell lines were used: The parental A2780 cell line, the OVK18 cell line, and their derived cisplatin‑resistant cells. It was found that cisplatin could induce ferroptosis in these parental cells by enhancing mitochondrial membrane potential and lipid peroxidation as assessed by flow cytometric analysis, and that expression of Ferredoxin1 (Fdx1), an iron‑sulfur protein localized to the mitochondria, could be upregulated in cisplatin‑resistant cells in the absence of cisplatin. Intriguingly, it was shown that the siRNA‑mediated depletion of Fdx1 in cisplatin‑resistant cells resulted in enhanced ferroptosis by increasing the mitochondrial membrane potential and lipid peroxidation induced by cisplatin. By examining Fdx1 expression with immunohistochemical analysis in clinical specimens from patients with OC, higher expression of Fdx1 was detected in cisplatin‑resistant specimens than in cisplatin‑sensitive specimens. Collectively, these results indicated that Fdx1 may be a novel and suitable diagnostic/prognostic marker and therapeutic molecular target for the treatment of cisplatin‑resistant OC."
+            }
+          ],
+          "source_member": "pubmed25n1187.xml",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/37144519/"
+        },
+        {
+          "pmid": "32322174",
+          "title": "Insight into the role of p62 in the cisplatin resistant mechanisms of ovarian cancer.",
+          "pub_year": 2020,
+          "score": 0.023026315789473686,
+          "has_abstract": true,
+          "evidence": [
+            {
+              "chunk_id": "21c158311c777d0df5f17df6265812cd57bb1480521384787adfd44130958332",
+              "section": "abstract",
+              "text": "Cisplatin is a platinum-based first-line drug for treating ovarian cancer. However, chemotherapy tolerance has limited the efficacy of cisplatin for ovarian cancer patients. Research has demonstrated that cisplatin causes changes in cell survival and death signaling pathways through its interaction with macromolecules and organelles, which indicates that investigation into the DNA off-target effects of cisplatin may provide critical insights into the mechanisms underlying drug resistance. The multifunctional protein p62 works as a signaling hub in the regulation of pro-survival transcriptional factors NF-κB and Nrf2 and connects autophagy and apoptotic signals, which play important roles in maintaining cell homeostasis. In this review, we discuss the role of p62 in cisplatin resistance by exploring p62-associated signaling pathways based on current studies and our work. Insights into these resistance mechanisms may lead to more effective therapeutic strategies for ovarian cancer by targeting p62."
+            }
+          ],
+          "source_member": "pubmed25n1030.xml",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/32322174/"
+        }
+      ]
+    },
+    {
+      "id": "myocarditis",
+      "query": "COVID-19 vaccine myocarditis",
+      "seconds": 2.122,
+      "retrievers": [
+        "bm25",
+        "vector"
+      ],
+      "vector_status": "complete",
+      "ann": true,
+      "exact": false,
+      "results": [
+        {
+          "pmid": "39460358",
+          "title": "Myocarditis Associated with COVID-19 Vaccination.",
+          "pub_year": 2024,
+          "score": 0.03149801587301587,
+          "has_abstract": true,
+          "evidence": [
+            {
+              "chunk_id": "343612ea83ca68d3f89ca77f66fd57e9f43714136672f449346980519518cb70",
+              "section": "title",
+              "text": "Myocarditis Associated with COVID-19 Vaccination."
+            }
+          ],
+          "source_member": "pubmed25n1263.xml",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/39460358/"
+        },
+        {
+          "pmid": "38942751",
+          "title": "Myocarditis associated with COVID-19 vaccination.",
+          "pub_year": 2024,
+          "score": 0.030798389007344232,
+          "has_abstract": true,
+          "evidence": [
+            {
+              "chunk_id": "b54d4aee3938676ba6ff7e1416fbe8ad7269c2c869233735cdceb961f933684b",
+              "section": "title",
+              "text": "Myocarditis associated with COVID-19 vaccination."
+            }
+          ],
+          "source_member": "pubmed25n1246.xml",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/38942751/"
+        },
+        {
+          "pmid": "39835549",
+          "title": "Current Status and Future Trends in Myocarditis Related to the COVID-19 Vaccines: A Visual and Bibliometric Analysis.",
+          "pub_year": 2025,
+          "score": 0.03021353930031804,
+          "has_abstract": true,
+          "evidence": [
+            {
+              "chunk_id": "6a1210b7f0f874a0af5ea37f41161a08760215eb832d75707378524f4e9c8043",
+              "section": "title",
+              "text": "Current Status and Future Trends in Myocarditis Related to the COVID-19 Vaccines: A Visual and Bibliometric Analysis."
+            }
+          ],
+          "source_member": "pubmed25n1287.xml",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/39835549/"
+        },
+        {
+          "pmid": "37223162",
+          "title": "Myocarditis Following COVID-19 Vaccination: A Systematic Review.",
+          "pub_year": 2023,
+          "score": 0.029437229437229435,
+          "has_abstract": true,
+          "evidence": [
+            {
+              "chunk_id": "7756aafac81201b470899fb66f6c043c6d4f8e79ec547f922f9f1aa49c6a9549",
+              "section": "title",
+              "text": "Myocarditis Following COVID-19 Vaccination: A Systematic Review."
+            }
+          ],
+          "source_member": "pubmed25n1190.xml",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/37223162/"
+        },
+        {
+          "pmid": "38293564",
+          "title": "Determinants of COVID-19 vaccine-induced myocarditis.",
+          "pub_year": 2024,
+          "score": 0.029273504273504274,
+          "has_abstract": true,
+          "evidence": [
+            {
+              "chunk_id": "0d610cab6d73407d7dd1c7b4409fe32d2a35eda0da298b0573f35677b1010d77",
+              "section": "title",
+              "text": "Determinants of COVID-19 vaccine-induced myocarditis."
+            }
+          ],
+          "source_member": "pubmed25n1225.xml",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/38293564/"
+        }
+      ]
+    },
+    {
+      "id": "recent-diabetes",
+      "query": "continuous glucose monitoring type 2 diabetes",
+      "since_year": 2020,
+      "seconds": 2.917,
+      "retrievers": [
+        "bm25",
+        "vector"
+      ],
+      "vector_status": "complete",
+      "ann": true,
+      "exact": false,
+      "results": [
+        {
+          "pmid": "34688421",
+          "title": "Continuous Glucose Monitoring for the Internist.",
+          "pub_year": 2021,
+          "score": 0.03028233151183971,
+          "has_abstract": true,
+          "evidence": [
+            {
+              "chunk_id": "999b7403ffa13421ee5c7dafdaa269f182fd62d6b93aa8a15d049b0ebfdc1ac2",
+              "section": "abstract",
+              "text": "Continuous glucose monitoring system is a convenient wearable device that provides glucose readings from the interstitial fluid every few minutes. Continuous glucose monitoring has revolutionized diabetes care. Patients with type 1 diabetes mellitus and type 2 diabetes mellitus, regardless of the type of treatment regimen, can benefit from continuous glucose monitoring. Continuous glucose monitoring systems provide patients with diabetes and their providers with an ambulatory glucose report that summarizes and also gives graphical representations of the glucose data. This wealth of information helps to better understand patients' glycemic patterns, and thereby reduces hemoglobin A1c and hypoglycemia."
+            }
+          ],
+          "source_member": "pubmed25n1107.xml",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/34688421/"
+        },
+        {
+          "pmid": "38781595",
+          "title": "Continuous Glucose Monitoring for Management of Type 2 Diabetes and Perinatal Outcomes.",
+          "pub_year": 2024,
+          "score": 0.028958333333333336,
+          "has_abstract": true,
+          "evidence": [
+            {
+              "chunk_id": "b53c32371ca02b27e778aed0bf53a750f1852b3065d7b9d85eac4a9ffa1c56bf",
+              "section": "title",
+              "text": "Continuous Glucose Monitoring for Management of Type 2 Diabetes and Perinatal Outcomes."
+            }
+          ],
+          "source_member": "pubmed25n1394.xml",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/38781595/"
+        },
+        {
+          "pmid": "39219394",
+          "title": "[Continuous glucose monitoring for better glucose control in type 2 diabetes?]",
+          "pub_year": 2024,
+          "score": 0.02889344262295082,
+          "has_abstract": true,
+          "evidence": [
+            {
+              "chunk_id": "a2ea151ae32998c6f9a0f6b137ab03bb9a5ce11df03764193f521b988701d3e7",
+              "section": "title",
+              "text": "[Continuous glucose monitoring for better glucose control in type 2 diabetes?]"
+            },
+            {
+              "chunk_id": "ef1d3154f85ffcaab5d688b8b1ebfd6e888d3182d26fa08888153939a647f2bd",
+              "section": "abstract",
+              "text": "This article reviews the use of continuous glucose monitoring (CGM) devices in the management of type 2 diabetes (T2D). Study results show that continuous CGM use improves glycemic control, lowers glycated hemoglobin (HbA1c) levels, and reduces hypoglycemic episodes compared with traditional monitoring methods. -Observational studies also suggest a reduction in diabetes-related emergencies and hospitalizations. In addition, sporadic use of CGM appears to be beneficial for certain groups of people with T2D. However, more research is needed to fully understand the long-term effects and limitations of this technology. This article discusses -innovative perspectives on T2D management."
+            }
+          ],
+          "source_member": "pubmed25n1256.xml",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/39219394/"
+        },
+        {
+          "pmid": "37736430",
+          "title": "Continuous Glucose Monitoring vs. Capillary Blood Glucose in Hospitalized Type 2 Diabetes Patients.",
+          "pub_year": 2023,
+          "score": 0.02862400327131466,
+          "has_abstract": true,
+          "evidence": [
+            {
+              "chunk_id": "b81a48ce032421db1089b8136aa2d005dd717869e09f767e0cf475093ad47770",
+              "section": "abstract",
+              "text": "= 0.455, and p = 0.606, respectively). CONCLUSIONS: This retrospective study supports the use of continuous glucose monitoring in optimizing glycemic control in hospitalized patients with type 2 diabetes on intensive insulin therapy. These findings suggest that continuous glucose monitoring can improve time-in-range and prevent hyperglycemia."
+            },
+            {
+              "chunk_id": "183f686e7cfc8f322004ef47bc17ae9db356c4199084b1c3c71148d5acc30431",
+              "section": "title",
+              "text": "Continuous Glucose Monitoring vs. Capillary Blood Glucose in Hospitalized Type 2 Diabetes Patients."
+            }
+          ],
+          "source_member": "pubmed25n1207.xml",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/37736430/"
+        },
+        {
+          "pmid": "34569811",
+          "title": "Continuous Glucose Monitoring for Type 2 Diabetes: How Does It Compare with Type 1 Diabetes?",
+          "pub_year": 2022,
+          "score": 0.028177225029148854,
+          "has_abstract": false,
+          "evidence": [
+            {
+              "chunk_id": "2d0d2a407424c10515050b7012b562cb76ad8808767396ff0b9be9da391a9638",
+              "section": "title",
+              "text": "Continuous Glucose Monitoring for Type 2 Diabetes: How Does It Compare with Type 1 Diabetes?"
+            }
+          ],
+          "source_member": "pubmed25n1103.xml",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/34569811/"
+        }
+      ]
+    }
+  ],
+  "limitations": "Single-process local smoke timing; not a concurrency or clinical-accuracy certification."
+}

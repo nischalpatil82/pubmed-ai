@@ -1,0 +1,208 @@
+{
+  "health": {
+    "ok": true,
+    "dataset": {
+      "dataset_id": "covid-files",
+      "snapshot": "47c83a9c970e3c66286a",
+      "status": "ready",
+      "store": "stores\\47c83a9c970e3c66286a",
+      "index": "indexes\\47c83a9c970e3c66286a",
+      "pilot": true
+    },
+    "search_ready": true
+  },
+  "stats": {
+    "articles": 51124,
+    "with_abstract": 45518,
+    "without_abstract": 5606,
+    "dataset": {
+      "dataset_id": "covid-files",
+      "snapshot": "47c83a9c970e3c66286a",
+      "status": "ready",
+      "store": "stores\\47c83a9c970e3c66286a",
+      "index": "indexes\\47c83a9c970e3c66286a",
+      "pilot": true
+    },
+    "coverage_note": "Selected source records only; not complete PubMed or full-text coverage. Author identities are provisional.",
+    "journals": 4962,
+    "authorship_rows": 342784,
+    "authors": 299338,
+    "concepts": 124536,
+    "year_range": [
+      1968,
+      2025
+    ],
+    "year_core": [
+      2019,
+      2025
+    ],
+    "year_core_pct": 95,
+    "retrievers": [
+      "bm25"
+    ],
+    "dense_model": null,
+    "search_error": null
+  },
+  "search": {
+    "retrievers": [
+      "bm25"
+    ],
+    "dense_model": null,
+    "vector_status": "absent",
+    "dense_error": null,
+    "snapshot": "47c83a9c970e3c66286a",
+    "filters": {
+      "since_year": 2020,
+      "until_year": null
+    },
+    "exact": false,
+    "results": [
+      {
+        "pmid": "39822457",
+        "title": "Evaluation of Cognitive and Synaptic Restoration in Diabetic Rats Treated With Emblica officinalis, Clitoria ternatea, Vitamin C, and Metformin.",
+        "pub_year": 2024,
+        "score": 0.01639344262295082,
+        "has_abstract": true,
+        "evidence": [
+          {
+            "section": "abstract",
+            "text": "BACKGROUND: Diabetes is known to cause cognitive impairments and synaptic dysfunction. This study investigates the effects of Emblica officinalis (EO), Clitoria ternatea (CT), Vitamin C, and metformin on cognitive function and synaptic density (SYN) in diabetic rats. This work aims to evaluate the impact of various treatments on spatial learning, memory, and SYN in a diabetic rat model. METHODS: The Morris water maze test was used to assess spatial learning and memory at four time points (Days 1, 3, 14, and 21). SYN was measured using optical density to assess SYN expression. Eight experimental groups were included: Non-diabetic Control, Diabetic Control, Diabetic + EO, Diabetic + CT, Diabetic + Vitamin C, Diabetic + Metformin, Non-diabetic + EO, and Non-diabetic + CT. RESULTS: On Day 1, the Diabetic Control group exhibited significantly longer latency times, indicating cognitive impairment. Diabetic + EO\u00a0and Diabetic + CT\u00a0showed the most significant improvements in cognitive performance compared to other diabetic groups, while Diabetic + ",
+            "chunk_id": "185a40c0176b204dcfa54ad214cf5f949942d668acb07fd9f026b86eee87d032"
+          },
+          {
+            "section": "abstract",
+            "text": "CT\u00a0offer significant therapeutic potential for mitigating cognitive deficits and enhancing SYN in diabetic animals. Although metformin also improved cognitive function and SYN, it exhibited the most robust restorative effects. These findings highlight the potential of herbal treatments like EO\u00a0and CT\u00a0for managing cognitive dysfunction in diabetes.",
+            "chunk_id": "c291ca6c230647c23cc61766eb8235aa4133da3ac3ff8b26f7fa9b6503c57a32"
+          }
+        ],
+        "source_member": "pubmed25n1285.xml",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/39822457/",
+        "snippet": "BACKGROUND: Diabetes is known to cause cognitive impairments and synaptic dysfunction. This study investigates the effects of Emblica officinalis (EO), Clitoria ternatea (CT), Vitamin C, and metformin on cognitive function and synaptic density (SYN) in diabetic rats. This work aims to evaluate the impact of various tre\u2026",
+        "doi": "10.7759/cureus.75866",
+        "journal": "Cureus"
+      },
+      {
+        "pmid": "33470340",
+        "title": "Use of automated quantitative pupillometric evaluation for monitoring the severity of diabetic retinopathy.",
+        "pub_year": 2021,
+        "score": 0.016129032258064516,
+        "has_abstract": true,
+        "evidence": [
+          {
+            "section": "abstract",
+            "text": "PURPOSE: We aimed to evaluate the use of automated quantitative static and dynamic pupillometry in screening patients with type 2 diabetes mellitus and different stages of diabetic retinopathy. METHOD: 155 patients with type 2 diabetes mellitus (diabetes mellitus group) were included in this study and another 145 age- and sex-matched healthy individuals to serve as the control group. The diabetes mellitus group was divided into three subgroups: diabetes mellitus without diabetic retinopathy (No-diabetic retinopathy), nonproliferative diabetic retinopathy, and proliferative diabetic retinopathy. Static and dynamic pupillometry were performed using a rotating Scheimpflug camera with a topography-based system. RESULTS: In terms of pupil diameter in both static and dynamic pupillometry (p<0.05), statistically significant differences were observed between the diabetes mellitus and control groups and also between the subgroups No-diabetic retinopathy, nonproliferative diabetic retinopathy, and proliferative diabetic retinopathy subgroups. But it was noted that No-diabetic retinopathy and nonproliferative diabetic retinopathy groups have showed similarities in the findings derived from static pupillometry under mesopic ",
+            "chunk_id": "3e799810e6b4fff15adccb952cc79d36631e9183b05a2799ce7598f22f94e75c"
+          },
+          {
+            "section": "abstract",
+            "text": "retinopathy, and proliferative diabetic retinopathy subgroups. But it was noted that No-diabetic retinopathy and nonproliferative diabetic retinopathy groups have showed similarities in the findings derived from static pupillometry under mesopic and photopic conditions. The two groups also appeared similar at all points during the dynamic pupillometry (p>0.05). However, it could be concluded that the proliferative diabetic retinopathy group was significantly different from the rest of the subgroups, No-diabetic retinopathy and nonproliferative diabetic retinopathy groups, in terms of all the static pupillometry measurements (p<0.05). The average speed of dilation was also significantly different between the diabetes mellitus and control groups and among the diabetes mellitus subgroups (p<0.001). While weak to moderate significant correlations were found between all pupil diameters in static and dynamic pupillometry with the duration of diabetes mellitus (p<0.05 for all), the HbA1c values showed no statistically significant correlations with any of the investigated static and dynamic pupil diameters (p>0.05 for all). CONCLUSION: This study revealed that the measurements ",
+            "chunk_id": "08a3e56492629778123ee96945b7dda34611fe294753af091f80542998f352de"
+          }
+        ],
+        "source_member": "pubmed25n1509.xml",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/33470340/",
+        "snippet": "PURPOSE: We aimed to evaluate the use of automated quantitative static and dynamic pupillometry in screening patients with type 2 diabetes mellitus and different stages of diabetic retinopathy. METHOD: 155 patients with type 2 diabetes mellitus (diabetes mellitus group) were included in this study and another 145 age- \u2026",
+        "doi": "10.5935/0004-2749.20210007",
+        "journal": "Arq Bras Oftalmol"
+      },
+      {
+        "pmid": "31759066",
+        "title": "Inhalation exposure to cigarette smoke induces endothelial nitric oxide synthase uncoupling and enhances vascular collagen deposition in streptozotocin-induced diabetic rats.",
+        "pub_year": 2020,
+        "score": 0.015873015873015872,
+        "has_abstract": true,
+        "evidence": [
+          {
+            "section": "abstract",
+            "text": "Smoking is an acknowledged risk factor for vascular disorders, and vascular complication is a main outcome of diabetes. Hence, we investigated the impact of cigarette smoke on blood vessels in diabetes, postulating that smoking might aggravate diabetic vascular impairment. Sprague-Dawley rats were divided into four groups: control, cigarette smoke-exposed, diabetic, and cigarette smoke-exposed diabetic groups. Streptozotocin-induced diabetic rats were exposed to cigarette smoke by inhalation at total particulate matter concentration of 200\u00a0\u03bcg/L for 4\u00a0h/day, 5 day/week for a total of 4 weeks. Diabetes caused structural change of aorta, but additional cigarette smoke exposure did not induce further alteration. Collagen, a marker for fibrosis, was increased in media of diabetic aorta, and this increase was augmented by cigarette smoke. Cigarette smoke induced endothelial nitric oxide synthase (eNOS) uncoupling in the diabetic group. Malondialdehyde was increased and glutathione was decreased in blood from diabetes, but these effects were not exaggerated by cigarette smoke. Cigarette smoke caused NADPH oxidase (NOX) 2 ",
+            "chunk_id": "450f0d7f9251156db70257b08c202434574c9083399b5bcce1a6853753329ee5"
+          },
+          {
+            "section": "abstract",
+            "text": "the diabetic group. Malondialdehyde was increased and glutathione was decreased in blood from diabetes, but these effects were not exaggerated by cigarette smoke. Cigarette smoke caused NADPH oxidase (NOX) 2 expression in diabetic aorta and enhanced diabetes-induced NOX4 expression in aorta. Taken together, cigarette smoke exposure can aggravate vascular fibrosis and induce eNOS uncoupling in diabetes under experimental condition, suggesting that smoking might exacerbate diabetic vascular impairments.",
+            "chunk_id": "19b1645cccfd947a7c6f336d95f344c862b87231d1fb9afea6995c05b67bd94f"
+          }
+        ],
+        "source_member": "pubmed25n1011.xml",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/31759066/",
+        "snippet": "Smoking is an acknowledged risk factor for vascular disorders, and vascular complication is a main outcome of diabetes. Hence, we investigated the impact of cigarette smoke on blood vessels in diabetes, postulating that smoking might aggravate diabetic vascular impairment. Sprague-Dawley rats were divided into four gro\u2026",
+        "doi": "10.1016/j.fct.2019.110988",
+        "journal": "Food Chem Toxicol"
+      },
+      {
+        "pmid": "31749048",
+        "title": "Frequent physical activity is associated with reduced risk of severe diabetic retinopathy in type 1 diabetes.",
+        "pub_year": 2020,
+        "score": 0.015625,
+        "has_abstract": true,
+        "evidence": [
+          {
+            "section": "abstract",
+            "text": "AIMS: The aim of this study was to investigate whether leisure-time physical activity (LTPA) is associated with the development of severe diabetic retinopathy in individuals with type 1 diabetes. METHODS: Prospective observational analysis as part of the Finnish diabetic nephropathy (FinnDiane) Study with a mean follow-up time of 10.7\u00a0years was performed. A total of 1612 individuals with type 1 diabetes were recruited, and LTPA was assessed at baseline using a validated self-report questionnaire. Severe diabetic retinopathy was defined as the initiation of laser treatment due to severe nonproliferative, proliferative retinopathy or diabetic maculopathy (identified from the Care Register for Health Care). RESULTS: A total of 261 patients received laser treatment during the follow-up. Higher frequency of LTPA was associated with a lower incidence of severe diabetic retinopathy (p\u2009=\u20090.024), a finding that remained significant after adjustment for gender, duration, age at onset of diabetes, kidney function, BMI, triglycerides and systolic blood pressure. However, when HbA1c and smoking were ",
+            "chunk_id": "9296b5c25ba8c904f873f552cab8bfff4978a5902c68cd7c34fc0f33cf91f5bb"
+          },
+          {
+            "section": "abstract",
+            "text": "0.024), a finding that remained significant after adjustment for gender, duration, age at onset of diabetes, kidney function, BMI, triglycerides and systolic blood pressure. However, when HbA1c and smoking were added to the Cox regression model the association was no more significant. CONCLUSIONS: Frequent LTPA is associated with a lower incidence of severe diabetic retinopathy during the follow-up. The total amount or the other components of LTPA (intensity or duration of a single session) were not associated with severe diabetic retinopathy.",
+            "chunk_id": "484debff40a47a243976a42b84311b7c50ba9f48e77885629cbab826fa66e28e"
+          }
+        ],
+        "source_member": "pubmed25n1011.xml",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/31749048/",
+        "snippet": "AIMS: The aim of this study was to investigate whether leisure-time physical activity (LTPA) is associated with the development of severe diabetic retinopathy in individuals with type 1 diabetes. METHODS: Prospective observational analysis as part of the Finnish diabetic nephropathy (FinnDiane) Study with a mean follow\u2026",
+        "doi": "10.1007/s00592-019-01454-y",
+        "journal": "Acta Diabetol"
+      },
+      {
+        "pmid": "37356446",
+        "title": "Global, regional, and national burden of diabetes from 1990 to 2021, with projections of prevalence to 2050: a systematic analysis for the Global Burden of Disease Study 2021.",
+        "pub_year": 2023,
+        "score": 0.015384615384615385,
+        "has_abstract": true,
+        "evidence": [
+          {
+            "section": "abstract",
+            "text": "BACKGROUND: Diabetes is one of the leading causes of death and disability worldwide, and affects people regardless of country, age group, or sex. Using the most recent evidentiary and analytical framework from the Global Burden of Diseases, Injuries, and Risk Factors Study (GBD), we produced location-specific, age-specific, and sex-specific estimates of diabetes prevalence and burden from 1990 to 2021, the proportion of type 1 and type 2 diabetes in 2021, the proportion of the type 2 diabetes burden attributable to selected risk factors, and projections of diabetes prevalence through 2050. METHODS: Estimates of diabetes prevalence and burden were computed in 204 countries and territories, across 25 age groups, for males and females separately and combined; these estimates comprised lost years of healthy life, measured in disability-adjusted life-years (DALYs; defined as the sum of years of life lost [YLLs] and years lived with disability [YLDs]). We used the Cause of Death Ensemble model (CODEm) approach to estimate deaths due to diabetes, ",
+            "chunk_id": "ff90115918017314d203e079f14f8d5808b7c7ff9825bfdd233ec2f22cba32c8"
+          },
+          {
+            "section": "abstract",
+            "text": "the sum of years of life lost [YLLs] and years lived with disability [YLDs]). We used the Cause of Death Ensemble model (CODEm) approach to estimate deaths due to diabetes, incorporating 25\u2009666 location-years of data from vital registration and verbal autopsy reports in separate total (including both type 1 and type 2 diabetes) and type-specific models. Other forms of diabetes, including gestational and monogenic diabetes, were not explicitly modelled. Total and type 1 diabetes prevalence was estimated by use of a Bayesian meta-regression modelling tool, DisMod-MR 2.1, to analyse 1527 location-years of data from the scientific literature, survey microdata, and insurance claims; type 2 diabetes estimates were computed by subtracting type 1 diabetes from total estimates. Mortality and prevalence estimates, along with standard life expectancy and disability weights, were used to calculate YLLs, YLDs, and DALYs. When appropriate, we extrapolated estimates to a hypothetical population with a standardised age structure to allow comparison in populations with different age structures. ",
+            "chunk_id": "7bceb68b32a4936e1c94cb3ba58340d6c53b0b9732c92be52a6f1df379a2aa06"
+          }
+        ],
+        "source_member": "pubmed25n1285.xml",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/37356446/",
+        "snippet": "BACKGROUND: Diabetes is one of the leading causes of death and disability worldwide, and affects people regardless of country, age group, or sex. Using the most recent evidentiary and analytical framework from the Global Burden of Diseases, Injuries, and Risk Factors Study (GBD), we produced location-specific, age-spec\u2026",
+        "doi": "10.1016/S0140-6736(23)01301-6",
+        "journal": "Lancet"
+      }
+    ],
+    "caveat": "Ranked evidence from selected files, not a corpus total. Title-only records provide no abstract findings.",
+    "ms": 1774
+  },
+  "direct_answer": {
+    "answer": "Articles: 51,124\nWith abstract: 45,518\nWithout abstract: 5,606\nCoverage note: Selected source records only; not complete PubMed or full-text coverage. Author identities are provisional.\nJournals: 4,962\nAuthorship rows: 342,784\nAuthors: 299,338\nConcepts: 124,536\nYear core pct: 95\nSelected source records only; not complete PubMed or full-text coverage. Author identities are provisional.",
+    "refused": false,
+    "calls": [
+      {
+        "tool": "corpus_stats",
+        "args": {}
+      }
+    ],
+    "model": "qwen2.5:7b",
+    "provider": "ollama",
+    "snapshot": "47c83a9c970e3c66286a",
+    "filters": {},
+    "disclosures": [
+      "Selected source records only; not complete PubMed or full-text coverage. Author identities are provisional."
+    ],
+    "usage": {
+      "model_calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0
+    },
+    "ms": 1802
+  },
+  "provider_called": false
+}

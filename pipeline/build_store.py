@@ -4,7 +4,8 @@ Stage 1 of the no-SQL stack: CSV -> Parquet fact store.
 
 Parquet + Polars gives exact aggregation with a Python API. No server, no SQL,
 no schema migrations - just columnar files on disk that Polars reads lazily.
-Later, pointing the same tool functions at Postgres changes nothing upstream.
+This CSV converter is retained for legacy inputs. New archive builds use
+stream_store.py, which preserves revision/deletion event order and child ownership.
 """
 import argparse
 import glob
@@ -67,7 +68,11 @@ def country_from_affiliation(col: pl.Expr) -> pl.Expr:
 def build(csv_dir: str, out_dir: str) -> None:
     os.makedirs(out_dir, exist_ok=True)
     for table, cols in SCHEMAS.items():
-        files = sorted(glob.glob(os.path.join(csv_dir, f"{table}__*.csv")))
+        # A source member can legitimately contain no rows for a table (for
+        # example, no DeleteCitation events). Polars rejects an empty CSV with
+        # NoDataError, so omit zero-byte shards while retaining real rows.
+        files = [p for p in sorted(glob.glob(os.path.join(csv_dir, f"{table}__*.csv")))
+                 if os.path.getsize(p) > 0]
         if not files:
             print(f"  {table:20s} (no files)")
             continue
@@ -106,6 +111,10 @@ def build(csv_dir: str, out_dir: str) -> None:
         mb = os.path.getsize(dest) / 1e6
         print(f"  {table:20s} {n:>9,} rows   {mb:>7.1f} MB{note}")
 
+    build_vocabulary(out_dir)
+
+
+def build_vocabulary(out_dir):
     # ---- vocabulary: every concept a user might name, in one file.
     # This is the entity-resolution surface. Free-text "cisplatin" or
     # "carotid stenosis" gets matched here BEFORE any retrieval happens.
@@ -133,7 +142,7 @@ def build(csv_dir: str, out_dir: str) -> None:
                   pl.col("term").first().alias("concept_name"))
              # singletons are mostly typos and one-off phrases; they bloat the
              # in-memory lookup without ever being queried.
-             .filter(pl.col("n_papers") >= 2)
+             .filter(pl.col("n_papers") >= 1)
              .with_columns((pl.lit("kw:") + pl.col("name_lc")).alias("concept_id"),
                            pl.lit("keyword").alias("kind"),
                            pl.lit(None, pl.Utf8).alias("code")))
