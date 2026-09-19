@@ -7,6 +7,11 @@ import shutil
 import sys
 import tempfile
 
+# The Rust Xet client can deadlock while finalizing multi-file uploads on
+# Windows. Traditional LFS streams files with bounded memory and leaves
+# uploaded blobs reusable when a later commit must be retried.
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "pipeline"))
 from dataset import paths, read_json
@@ -21,6 +26,11 @@ def configure_space(api, repo_id, data_repo=None, data_revision=None):
         "PUBMED_ALLOW_CLOUD": os.environ.get("PUBMED_ALLOW_CLOUD"),
         "PUBMED_API_BASE": os.environ.get("PUBMED_API_BASE"),
         "PUBMED_CLOUD_MODEL": os.environ.get("PUBMED_CLOUD_MODEL"),
+        # A fresh Space has no model cache. Permit the first startup to fetch
+        # the exact embedding-model revision recorded by the vector index.
+        "PUBMED_ALLOW_MODEL_DOWNLOAD": os.environ.get(
+            "PUBMED_ALLOW_MODEL_DOWNLOAD", "1"
+        ),
     }
     for key, value in variables.items():
         if value:
@@ -54,17 +64,16 @@ def publish_release(api, repo_id, inventory, store, index, snapshot):
     total = len(inventory["files"])
     while pending:
         batch = []
-        batch_bytes = 0
-        while pending and len(batch) < 24:
+        # Use one release commit for the remaining files. Hugging Face limits
+        # free repositories to 128 commits per hour; LFS blob uploads remain
+        # resumable even if the final commit must be retried.
+        while pending:
             relative, size, source = pending[0]
-            if batch and batch_bytes + size > 512 * 1024 * 1024:
-                break
             pending.pop(0)
             batch.append(CommitOperationAdd(path_in_repo=relative,
                                             path_or_fileobj=str(source)))
-            batch_bytes += size
         api.create_commit(repo_id, repo_type="dataset", operations=batch,
-                          num_threads=2,
+                          num_threads=4,
                           commit_message=(f"Upload {snapshot}: files "
                                           f"{uploaded + 1}-{uploaded + len(batch)} of {total}"))
         uploaded += len(batch)
@@ -110,6 +119,8 @@ def main():
         published_revision = commit.oid
         print(f"Dataset commit: {commit.oid}; configure PUBMED_DATA_REVISION to this exact commit.")
     if a.space_repo:
+        from huggingface_hub.errors import RepositoryNotFoundError
+
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp)
             shutil.copytree(ROOT / "pipeline", target / "pipeline", ignore=shutil.ignore_patterns("__pycache__", "_unused_*"))
@@ -118,7 +129,15 @@ def main():
             (target / "deploy").mkdir()
             shutil.copy2(ROOT / "deploy" / "fetch_data.py", target / "deploy" / "fetch_data.py")
             shutil.copy2(ROOT / "deploy" / "README.md", target / "README.md")
-            api.create_repo(a.space_repo, repo_type="space", space_sdk="docker", private=not a.public, exist_ok=True)
+            # Existing free Docker Spaces can still be updated even when the
+            # account cannot create a new Docker Space. Avoid calling the
+            # create endpoint for an existing deployment because it now
+            # returns HTTP 402 for non-Pro accounts.
+            try:
+                api.repo_info(a.space_repo, repo_type="space")
+            except RepositoryNotFoundError:
+                api.create_repo(a.space_repo, repo_type="space", space_sdk="docker",
+                                private=not a.public)
             api.upload_folder(repo_id=a.space_repo, repo_type="space", folder_path=str(target),
                               commit_message="Deploy dataset-aware PubMed application")
             configured = configure_space(api, a.space_repo, a.data_repo,
