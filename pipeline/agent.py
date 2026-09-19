@@ -148,8 +148,16 @@ def run(question, model=MODEL, max_steps=6, verbose=True, adaptive=True, filters
         usage["model_calls"] += 1
         for key in ("prompt_tokens", "completion_tokens"):
             usage[key] += measured.get(key, 0) or 0
-        messages.append(msg)
         calls = msg.get("tool_calls") or []
+        # Providers may return output-only fields such as Groq's `reasoning`.
+        # Sending those fields back in the next Chat Completions request makes
+        # the provider reject an otherwise valid tool conversation with 400.
+        assistant_message = {"role": msg.get("role", "assistant")}
+        if msg.get("content") is not None:
+            assistant_message["content"] = msg["content"]
+        if calls:
+            assistant_message["tool_calls"] = calls
+        messages.append(assistant_message)
         if not calls:
             try:
                 proposal = json.loads(msg.get("content") or "{}")
