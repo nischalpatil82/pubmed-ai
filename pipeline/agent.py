@@ -57,6 +57,15 @@ def llm_status():
 def chat(messages, model, timeout):
     timeout = max(1, timeout)
     config = llm_status()
+    # Once an evidence tool has returned bounded passages, the next model turn
+    # only needs to write the cited answer. Re-sending every tool schema wastes
+    # roughly two thousand tokens and can exceed free-provider per-minute token
+    # limits before the answer is generated.
+    include_tools = not (
+        messages
+        and messages[-1].get("role") == "tool"
+        and messages[-1].get("name") in ("search_literature", "get_articles")
+    )
     if config["provider"] == "cloud":
         if not config["cloud_allowed"]:
             raise RuntimeError("Cloud processing is not enabled; set PUBMED_ALLOW_CLOUD=1")
@@ -65,16 +74,24 @@ def chat(messages, model, timeout):
         key = os.environ.get("PUBMED_API_KEY")
         if not config["configured"]:
             raise RuntimeError("Configure PUBMED_API_BASE, PUBMED_API_KEY and PUBMED_CLOUD_MODEL")
+        payload = {"model": model, "messages": messages,
+                   "temperature": 0, "max_tokens": 650}
+        if include_tools:
+            payload["tools"] = tools.TOOL_SCHEMAS
         response = requests.post(base.rstrip("/") + "/chat/completions",
             headers={"Authorization": "Bearer " + key},
-            json={"model": model, "messages": messages, "tools": tools.TOOL_SCHEMAS,
-                  "temperature": 0, "max_tokens": 650}, timeout=(min(10, timeout), timeout))
+            json=payload, timeout=(min(10, timeout), timeout))
         response.raise_for_status()
         data = response.json()
         return {**data["choices"][0]["message"], "_usage": data.get("usage", {})}
     import ollama
-    response = ollama.Client(timeout=timeout).chat(model=model, messages=messages, tools=tools.TOOL_SCHEMAS,
-        options={"temperature": 0, "num_ctx": int(os.environ.get("PUBMED_NUM_CTX", "8192")), "num_predict": 650})
+    kwargs = {"model": model, "messages": messages,
+              "options": {"temperature": 0,
+                          "num_ctx": int(os.environ.get("PUBMED_NUM_CTX", "8192")),
+                          "num_predict": 650}}
+    if include_tools:
+        kwargs["tools"] = tools.TOOL_SCHEMAS
+    response = ollama.Client(timeout=timeout).chat(**kwargs)
     message = response["message"]
     message = message.model_dump() if hasattr(message, "model_dump") else message
     return {**message, "_usage": {"prompt_tokens": response.get("prompt_eval_count", 0),
@@ -152,9 +169,10 @@ def run(question, model=MODEL, max_steps=6, verbose=True, adaptive=True, filters
         # Providers may return output-only fields such as Groq's `reasoning`.
         # Sending those fields back in the next Chat Completions request makes
         # the provider reject an otherwise valid tool conversation with 400.
-        assistant_message = {"role": msg.get("role", "assistant")}
-        if msg.get("content") is not None:
-            assistant_message["content"] = msg["content"]
+        # Groq requires the assistant `content` member to remain present (null
+        # is valid) on a tool-call turn.
+        assistant_message = {"role": msg.get("role", "assistant"),
+                             "content": msg.get("content")}
         if calls:
             assistant_message["tool_calls"] = calls
         messages.append(assistant_message)
