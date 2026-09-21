@@ -1,5 +1,9 @@
 # PubMed Literature Intelligence
 
+New to the project? Read the [complete beginner walkthrough](PROJECT_WALKTHROUGH.md)
+for the architecture, data flow, every production file/function, deployment,
+tests, limitations and a ready-to-use demonstration script.
+
 Build and launch instructions: [pipeline/IMPLEMENTATION.md](pipeline/IMPLEMENTATION.md).
 Completed Kaggle embedding workflow: [kaggle/README.md](kaggle/README.md).
 
