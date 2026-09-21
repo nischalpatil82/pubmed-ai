@@ -33,7 +33,7 @@ function ui(respond = () => ({ answer: 'Mock answer', filters: {} })) {
   // Suppress only boot's network activity; compile and execute all other UI code.
   vm.runInContext(script.replace(/boot\(\);\s*$/, ''), context);
   const run = code => vm.runInContext(code, context);
-  run('Object.assign(S,{q:"example",since:"2019",until:"2022",concept:{concept_id:"D1",concept_name:"One"},view:"ask",results:{keyword_match_count:1,results:[]}})');
+  run('Object.assign(S,{q:"example",askQuestion:"example",since:"2019",until:"2022",concept:{concept_id:"D1",concept_name:"One"},view:"ask",results:{keyword_match_count:1,results:[]}})');
   return { run, node, requests, context };
 }
 
@@ -284,4 +284,37 @@ test('Research overview is first and Ask exposes the example question', () => {
   assert.match(html,/view:"overview"/);
   assert.match(html,/What do papers report about long COVID fatigue\?/);
   assert.match(html,/\/api\/ask\/stream/);
+});
+
+test('Ask starts empty instead of copying the evidence query', () => {
+  const u = ui();
+  u.run('S.q="covid";S.askQuestion="";askView()');
+  assert.match(u.node('#work').innerHTML, /id="askQuestion" value=""/);
+  assert.doesNotMatch(u.node('#work').innerHTML, /id="askQuestion" value="covid"/);
+});
+
+test('researcher table omits the role score', () => {
+  const u = ui();
+  const output = u.run('table("Researchers","Publication activity",{results:[{name:"Researcher",first_author:2,senior_author:1,papers:4}],total_authors:1},"Researcher","total_authors")');
+  assert.doesNotMatch(output, /Role score|kol_score/);
+  assert.match(output, /First author/);
+  assert.match(output, /Senior author/);
+});
+
+test('matching count avoids a false semantic total and explains semantic ranking', () => {
+  const u = ui();
+  u.run('S.results={keyword_match_count:42,ann:true,results:[]};matchTotal();evidenceView()');
+  assert.match(u.node('#matchTotal').innerHTML, /Matching papers/);
+  assert.doesNotMatch(u.node('#matchTotal').innerHTML, /keyword/i);
+  assert.match(u.node('#work').innerHTML, /text and semantic ranking/);
+});
+
+test('comparison shows totals, unique papers, overlap and combined literature', () => {
+  const u = ui();
+  const output = u.run('compareSummary({a:{concept:"Topic A",papers:100},b:{concept:"Topic B",papers:80},overlap_papers:20,overlap_pct_of_a:20,overlap_pct_of_b:25})');
+  for (const phrase of ['Unique to this topic','Shared papers','Combined distinct papers','12.5% of the combined distinct literature']) {
+    assert.ok(output.includes(phrase), phrase);
+  }
+  assert.match(output, /Topic A has 20 more papers/);
+  assert.match(output, /does not determine/);
 });

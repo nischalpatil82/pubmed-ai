@@ -118,7 +118,7 @@ turn a ranked sample into complete coverage.
 | RAG | Retrieval-augmented generation | Retrieves evidence first, then lets an LLM explain only that evidence. |
 | Agent/tool calling | Model selects named functions | The answer model can call only registered project tools within budgets. |
 | Citation | A source link or reference edge | UI citations are PMIDs/quotes; “cited within collection” counts internal reference edges only. |
-| Role score | Publication-role ranking | Default formula: papers + 1.5× first-author papers + 2× senior-author papers + recent papers. It is not clinical quality. |
+| Author-position counts | Publication activity | The interface shows total, first-author and senior-author paper counts. These describe publication activity, not clinical quality. |
 
 ## 4. End-to-end architecture
 
@@ -782,10 +782,9 @@ within the active year bounds. It never means all PubMed.
 **What does “citations” mean?**  A reference link from one supplied PubMed record
 to another represented PMID. It is collection-local influence, not a global count.
 
-**What does “role score” mean?**  The default formula is total papers + 1.5 times
-first-author papers + 2 times senior/last-author papers + recent papers. The
-weights are function parameters, so they can be debated and changed without
-rewriting the algorithm. It is not expertise, quality or clinical authority.
+**What do the researcher counts mean?**  Total papers show publication volume,
+while first-author and senior-author columns show recorded author positions.
+They describe publication activity, not expertise, quality or clinical authority.
 
 **What happens if vectors fail?**  Health reports degradation and BM25 remains
 available. The app does not silently call that path hybrid.
