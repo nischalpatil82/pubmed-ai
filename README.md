@@ -107,22 +107,25 @@ them is the usual reason "AI over documents" projects disappoint.
                     the answer
 ```
 
-The UI has five tabs:
+The UI has five tabs, with the overview first:
 
+- **Research overview**: the exact keyword-match count for the submitted query,
+  publication trend, study types, in-collection citations and registry links.
 - **Evidence**: ranked papers with source passages, record details and CSV export.
-- **Research overview**: publication trend, study types, in-collection citations
-  and registry links.
 - **Entities**: limited rankings for journals, named substances, researchers,
   countries and institutions, with structured counts and caveats.
 - **Compare**: two recognised concepts' publication counts and overlap, not
   clinical effectiveness.
-- **Ask**: opt-in typed count/list answers or verified extractive evidence;
-  insufficient evidence or request limits can produce a refusal.
+- **Ask**: a dedicated research-question field, visible retrieval/generation
+  progress, and opt-in typed count/list answers or verified extractive evidence;
+  insufficient evidence or provider limits can produce a refusal.
 
-Analytics use the selected concept and supported year filters, not the free-text
-query used by Evidence. Without a concept selection, analytics cover the collection
-within supported year filters. Panel errors (including HTTP 200 `{error}` responses)
-are displayed separately from empty results; other successful panels remain visible.
+The matching-paper metric counts every positive BM25 keyword match after the
+selected concept and year filters; the same value appears beside the search filters
+and in Research overview. Other analytics use the selected concept and supported
+year filters. Without a concept selection, those panels cover the collection within
+supported year filters. Panel errors (including HTTP 200 `{error}` responses) are
+displayed separately from empty results; other successful panels remain visible.
 
 Count/list tool outputs are rendered deterministically rather than rewritten as
 model-generated numerical prose. Findings are validated as verbatim abstract

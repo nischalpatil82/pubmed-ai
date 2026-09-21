@@ -101,6 +101,45 @@ def render_quotes(proposal, records):
     return "Retrieved abstract excerpts (relevance requires review):\n\n" + "\n\n".join(lines)
 
 
+def render_grounded_claims(proposal, candidates):
+    """Render model explanations only when every claim cites supplied excerpts."""
+    if not isinstance(proposal, dict) or not isinstance(proposal.get("claims"), list):
+        raise ValueError("Expected a claims list")
+    if not 1 <= len(proposal["claims"]) <= 5:
+        raise ValueError("Expected one to five supported claims")
+    by_id = {int(item["id"]): item for item in candidates}
+    import html
+    blocks = []
+    for claim in proposal["claims"]:
+        text = claim.get("text", "")
+        source_ids = claim.get("source_ids")
+        if not isinstance(text, str) or not 20 <= len(text.strip()) <= 700:
+            raise ValueError("Invalid claim text")
+        if not isinstance(source_ids, list) or not 1 <= len(source_ids) <= 3:
+            raise ValueError("Every claim needs one to three source IDs")
+        try:
+            sources = [by_id[int(source_id)] for source_id in source_ids]
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("Claim references evidence that was not supplied") from None
+        safe_text = html.escape(text.strip()).replace("[", "\\[").replace("]", "\\]")
+        pmids = []
+        quotes = []
+        for source in sources:
+            pmid, quote = str(source["pmid"]), source["quote"]
+            if not isinstance(quote, str) or len(quote.strip()) < 20:
+                raise ValueError("Invalid supporting excerpt")
+            if pmid not in pmids:
+                pmids.append(pmid)
+            safe_quote = (html.escape(quote.strip()).replace("[", "\\[")
+                          .replace("]", "\\]").replace("*", "\\*")
+                          .replace("`", "\\`"))
+            quotes.append(f'> {safe_quote}\n\n[PMID {pmid}](https://pubmed.ncbi.nlm.nih.gov/{pmid}/)')
+        citations = ", ".join(f"PMID {pmid}" for pmid in pmids)
+        blocks.append(f"{safe_text} ({citations})\n\n" + "\n\n".join(quotes))
+    return ("Evidence-grounded summary (review the supporting excerpts):\n\n"
+            + "\n\n".join(blocks))
+
+
 def question_filters(question):
     between = re.search(r"\bbetween (\d{4}) and (\d{4})\b", question, re.I)
     if between:

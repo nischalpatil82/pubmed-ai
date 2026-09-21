@@ -18,6 +18,9 @@ import os
 import sys
 import time
 import threading
+import json
+import queue
+import re
 from typing import Any
 
 # Default the store/index locations before tools.py reads them, so the app
@@ -29,7 +32,7 @@ from dataset import pin
 pin()
 
 from fastapi import FastAPI, HTTPException, Query          # noqa: E402
-from fastapi.responses import FileResponse, JSONResponse   # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse  # noqa: E402
 
 import tools                                               # noqa: E402
 
@@ -369,7 +372,8 @@ def api_ask(q: str = Query(..., min_length=3, max_length=4000), model: str | Non
         out, ms = _timed(agent.run, q, model or agent.MODEL, 6, False,
                          filters=filters or None)
     except Exception as e:
-        raise HTTPException(503, f"model call failed: {type(e).__name__}: {e}")
+        detail = str(e) if isinstance(e, getattr(agent, "ModelCallError", RuntimeError)) else "The answer could not be completed. Please retry."
+        raise HTTPException(503, detail)
     # The trace holds full tool payloads; the page does not need them.
     out.pop("trace", None)
     out["ms"] = ms
@@ -377,6 +381,75 @@ def api_ask(q: str = Query(..., min_length=3, max_length=4000), model: str | Non
     # the local default, which reported "qwen2.5:7b" for cloud answers.
     out.setdefault("model", model or agent.MODEL)
     return out
+
+
+@app.get("/api/ask/stream")
+def api_ask_stream(q: str = Query(..., min_length=3, max_length=4000), model: str | None = None,
+                   concept_id: str | None = None, since_year: int | None = None,
+                   until_year: int | None = None):
+    """Stream truthful work stages, then the citation-checked answer text."""
+    _validate_years(since_year, until_year)
+    filters = {k: v for k, v in (("concept_id", concept_id),
+                                 ("since_year", since_year),
+                                 ("until_year", until_year)) if v is not None}
+
+    def line(value):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
+
+    def events():
+        channel = queue.Queue()
+        completed = object()
+
+        def emit(update):
+            channel.put({"type": "progress", **update})
+
+        def work():
+            started = time.perf_counter()
+            try:
+                import agent
+                out = agent.run(q, model or agent.MODEL, 6, False,
+                                filters=filters or None, progress=emit)
+                out.pop("trace", None)
+                out["ms"] = round((time.perf_counter() - started) * 1000)
+                out.setdefault("model", model or agent.MODEL)
+                channel.put({"type": "result", "data": out})
+            except Exception as error:
+                try:
+                    import agent
+                    safe = str(error) if isinstance(error, getattr(agent, "ModelCallError", RuntimeError)) else "The answer could not be completed. Please retry."
+                except Exception:
+                    safe = "The answer service is unavailable. Please retry."
+                channel.put({"type": "error", "message": safe})
+            finally:
+                channel.put(completed)
+
+        threading.Thread(target=work, name="pubmed-answer-stream", daemon=True).start()
+        result = None
+        while True:
+            try:
+                item = channel.get(timeout=10)
+            except queue.Empty:
+                yield line({"type": "progress", "stage": "waiting",
+                            "message": "The answer model is still working"})
+                continue
+            if item is completed:
+                break
+            if item.get("type") == "result":
+                result = item["data"]
+                continue
+            yield line(item)
+        if result is None:
+            return
+        answer = result.pop("answer", "")
+        yield line({"type": "meta", "data": result})
+        words = re.findall(r"\S+\s*", answer)
+        for start in range(0, len(words), 6):
+            yield line({"type": "delta", "text": "".join(words[start:start + 6])})
+            time.sleep(0.015)
+        yield line({"type": "done", "data": result})
+
+    return StreamingResponse(events(), media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.get("/api/article/{pmid}")

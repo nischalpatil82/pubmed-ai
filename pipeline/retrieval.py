@@ -114,8 +114,9 @@ class BM25Search:
         for name in self.cfg["shards"]:
             self._load_shard(name)
 
-    def search(self, query, k=20, since_year=None, until_year=None, allowed_pmids=None):
+    def _search(self, query, k=20, since_year=None, until_year=None, allowed_pmids=None):
         out = []
+        total = 0
         tokens = self.module.tokenize([query], stopwords="en", stemmer=self.stemmer,
                                      return_ids=False, show_progress=False)[0]
         for name in self.cfg["shards"]:
@@ -129,9 +130,19 @@ class BM25Search:
                 mask &= meta["pmid"].is_in(allowed_pmids).to_numpy()
             scores = r.get_scores(tokens)
             eligible = np.flatnonzero(mask & (scores > 0))
+            total += int(eligible.size)
             order = eligible[np.argsort(-scores[eligible], kind="stable")[:k]]
             out.extend({**meta.row(int(i), named=True), "score": float(scores[i])} for i in order)
-        return sorted(out, key=lambda row: (-row["score"], row["pmid"]))[:k]
+        return sorted(out, key=lambda row: (-row["score"], row["pmid"]))[:k], total
+
+    def search(self, query, k=20, since_year=None, until_year=None, allowed_pmids=None):
+        """Return ranked lexical hits while preserving the historical list API."""
+        return self._search(query, k, since_year, until_year, allowed_pmids)[0]
+
+    def search_with_count(self, query, k=20, since_year=None, until_year=None,
+                          allowed_pmids=None):
+        """Return ranked hits plus the exact number of eligible BM25 matches."""
+        return self._search(query, k, since_year, until_year, allowed_pmids)
 
 
 def token_passages(text, tokenizer, max_tokens, overlap=48):
@@ -324,7 +335,9 @@ class HybridSearch:
             raise ValueError("Query must contain 1 to 4000 characters")
         if since_year is not None and until_year is not None and since_year > until_year:
             raise ValueError("Invalid year range")
-        pools = {"bm25": self.bm25.search(query, k * 5, since_year, until_year, allowed_pmids)}
+        lexical, keyword_match_count = self.bm25.search_with_count(
+            query, k * 5, since_year, until_year, allowed_pmids)
+        pools = {"bm25": lexical}
         passages = {}
         if self.dense:
             query_text = "Represent this sentence for searching relevant passages: " + query if "bge-" in self.dense else query
@@ -388,6 +401,8 @@ class HybridSearch:
                 "dense_error": self.dense_error,
                 "snapshot": self.dataset["snapshot"], "filters": {"since_year": since_year, "until_year": until_year},
                 "ann": self.use_ann, "exact": bool(self.dense and not self.use_ann), "results": results[:k],
+                "keyword_match_count": keyword_match_count,
+                "match_definition": "BM25 keyword matches after the selected concept and year filters",
                 "caveat": "Ranked evidence from selected files, not a corpus total. Title-only records provide no abstract findings."}
 
 

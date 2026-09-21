@@ -15,7 +15,8 @@ import polars as pl
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pipeline"))
 from stream_store import build, finalize_owner_partitioned
 from dataset import paths, atomic_json
-from evidence import RequestState, bounded_payload, render_quotes, render_table
+from evidence import (RequestState, bounded_payload, render_quotes, render_table,
+                      render_grounded_claims)
 from retrieval import build_bm25, BM25Search, HybridSearch, token_passages, build_vectors, lexical_passages
 
 
@@ -88,10 +89,14 @@ class PipelineTest(unittest.TestCase):
     def test_title_only_and_filter_before_top_k(self):
         self.ingest([("a.xml", article(1, "Zebrafish zebrafish", year=2000) + article(2, "Zebrafish", abstract=None))])
         build_bm25(shard_size=1)
-        rows = BM25Search().search("zebrafish", k=1, since_year=2020)
+        searcher = BM25Search()
+        rows = searcher.search("zebrafish", k=1, since_year=2020)
         self.assertEqual(rows[0]["pmid"], "2")
         self.assertFalse(rows[0]["has_abstract"])
-        self.assertEqual(BM25Search().search("unfindableword"), [])
+        counted, total = searcher.search_with_count("zebrafish", k=1, since_year=2020)
+        self.assertEqual([row["pmid"] for row in counted], ["2"])
+        self.assertEqual(total, 1)
+        self.assertEqual(searcher.search("unfindableword"), [])
         _, index, _ = paths()
         atomic_json(index / "vector_model.json", {"complete": False})
         result = HybridSearch().search("zebrafish", since_year=2020)
@@ -173,6 +178,18 @@ class PipelineTest(unittest.TestCase):
         state.execute("count", {}, lambda *args: {"total_papers": 0})
         with self.assertRaises(ValueError):
             state.execute("count", {}, lambda *args: {})
+        grounded = render_grounded_claims(
+            {"claims": [{"text": "Fatigue persisted for some participants after infection.",
+                          "source_ids": [1]}]},
+            [{"id": 1, "pmid": "12345",
+              "quote": "Participants reported persistent fatigue after COVID-19."}])
+        self.assertIn("Fatigue persisted", grounded)
+        self.assertIn("PMID 12345", grounded)
+        with self.assertRaises(ValueError):
+            render_grounded_claims(
+                {"claims": [{"text": "Unsupported source must be rejected by the renderer.",
+                              "source_ids": [2]}]},
+                [{"id": 1, "pmid": "12345", "quote": records["12345"][0]}])
 
     def test_vector_resume_after_partial_write_is_idempotent(self):
         import numpy as np
@@ -276,10 +293,90 @@ class PipelineTest(unittest.TestCase):
             for digit, refused in [("8", True), ("7", False)]:
                 response = {"role": "assistant", "content": json.dumps({"evidence": [{"pmid": "12345", "quote": f"The study reported {digit} participants with improved outcomes."}]})}
                 with patch("agent.chat", side_effect=[tool_call, response]), patch("tools.call", return_value=result):
-                    answer = agent.run("What evidence is available?", adaptive=False)
+                    answer = agent.run("Investigate the available records.", adaptive=False)
                     self.assertEqual(answer["refused"], refused)
                     if refused:
                         self.assertNotIn("8 participants", answer["answer"])
+        finally:
+            tools.STORE, tools.INDEX, tools.DATASET = old
+
+    def test_groq_tool_request_retries_strict_payload_without_deprecated_tokens(self):
+        import agent
+
+        class Response:
+            def __init__(self, status, body):
+                self.status_code = status
+                self._body = body
+                self.ok = status == 200
+                self.headers = {}
+
+            def json(self):
+                return self._body
+
+        rejected = Response(400, {"error": {
+            "message": "Failed to call a function. Please adjust your prompt.",
+            "failed_generation": {"reason": "invalid tool arguments"},
+        }})
+        accepted = Response(200, {"choices": [{"message": {
+            "role": "assistant", "content": "ready",
+        }}], "usage": {"completion_tokens": 1}})
+        sent = []
+
+        def post(*args, **kwargs):
+            sent.append(kwargs["json"])
+            return rejected if len(sent) == 1 else accepted
+
+        config = {
+            "PUBMED_LLM": "cloud",
+            "PUBMED_ALLOW_CLOUD": "1",
+            "PUBMED_API_BASE": "https://api.groq.com/openai/v1",
+            "PUBMED_API_KEY": "test-key",
+            "PUBMED_CLOUD_MODEL": "openai/gpt-oss-120b",
+        }
+        with patch.dict(os.environ, config), patch("requests.post", side_effect=post):
+            reply = agent.chat([{"role": "user", "content": "question"}],
+                               "openai/gpt-oss-120b", 30)
+        self.assertEqual(reply["content"], "ready")
+        self.assertEqual(len(sent), 2)
+        self.assertEqual(sent[1]["temperature"], 0)
+        self.assertEqual(sent[1]["reasoning_format"], "hidden")
+        self.assertEqual(sent[1]["max_completion_tokens"], 900)
+        self.assertEqual(sent[1]["reasoning_effort"], "low")
+        self.assertNotIn("max_tokens", sent[1])
+        with patch.dict(os.environ, config), patch("requests.post", side_effect=post):
+            agent.chat([{"role": "user", "content": "write JSON"}],
+                       "openai/gpt-oss-120b", 30, allow_tools=False)
+        self.assertEqual(sent[2]["response_format"], {"type": "json_object"})
+        self.assertNotIn("tools", sent[2])
+        self.assertEqual(agent._json_answer('```json\n{"evidence": []}\n```'),
+                         {"evidence": []})
+
+    def test_findings_question_retrieves_before_one_model_call(self):
+        self.ingest([("a.xml", article(
+            12345, abstract="Participants reported persistent fatigue after COVID-19."))])
+        import tools
+        import agent
+        old = (tools.STORE, tools.INDEX, tools.DATASET)
+        tools.STORE, tools.INDEX, tools.DATASET = paths()
+        result = {"results": [{
+            "pmid": "12345", "has_abstract": True,
+            "abstract": "Participants reported persistent fatigue after COVID-19.",
+            "evidence": [{"section": "abstract",
+                          "text": "Participants reported persistent fatigue after COVID-19."}],
+        }]}
+        response = {"role": "assistant", "content": json.dumps({"claims": [{
+            "text": "The retrieved study reports persistent fatigue after COVID-19.",
+            "source_ids": [1],
+        }]})}
+        try:
+            with patch("agent.chat", return_value=response) as model, \
+                    patch("tools.call", return_value=result):
+                answer = agent.run(
+                    "What do papers report about long COVID fatigue?", adaptive=False)
+            self.assertIn("persistent fatigue", answer["answer"])
+            self.assertEqual(model.call_count, 1)
+            self.assertFalse(model.call_args.kwargs["allow_tools"])
+            self.assertEqual(answer["calls"][0]["tool"], "search_literature")
         finally:
             tools.STORE, tools.INDEX, tools.DATASET = old
 

@@ -300,38 +300,42 @@ the service is degraded. It never labels lexical-only results as full hybrid.
    are related, not merged into one medical concept.
 4. The user may select a chip. That selected `concept_id`, not the typed text,
    scopes exact analytics.
-5. The Evidence tab calls `/api/search` with the text, result limit, year range
-   and optional concept.
+5. The browser calls `/api/search` with the text, result limit, year range and
+   optional concept. Its exact positive-BM25 match count appears both beside the
+   filters and in Research overview; Evidence displays the ranked subset.
 6. FastAPI validates input, calls `HybridSearch`, measures time and returns JSON.
 7. The UI escapes all source strings before inserting them into HTML, renders
    evidence passages and links every result to its PMID/PubMed record.
 8. Research overview and Entities call separate exact endpoints in parallel.
    Without a chosen chip they cover the whole selected collection/year range.
 
-This explains the message “typed search alone does not filter this view.” Free
-text ranks evidence; a recognized selected concept gives a stable definition for
-exact corpus calculations.
+Free text determines the matching-paper count and ranks Evidence. A recognized
+selected concept gives the other structured overview calculations a stable scope.
 
 ## 10. What happens in Ask
 
-1. The browser sends the question and selected filters to `/api/ask`.
-2. `app.py` verifies that an answer model is explicitly configured.
-3. `agent.run()` creates a new `RequestState`; no previous user's tool state is
+1. The Ask tab provides its own question field; for example, enter “What do
+   papers report about long COVID fatigue?” there.
+2. The browser sends the question and selected filters to `/api/ask/stream`.
+   Progress events and the first retrieved records appear immediately; the
+   citation-checked answer is revealed in readable chunks after validation.
+3. `app.py` verifies that an answer model is explicitly configured.
+4. `agent.run()` creates a new `RequestState`; no previous user's tool state is
    reused.
-4. The system prompt tells the model that source text is untrusted data, only
+5. The system prompt tells the model that source text is untrusted data, only
    supplied tools may be used, and filters cannot be silently discarded.
-5. The LLM chooses a registered typed tool. It never receives arbitrary Python,
+6. The LLM chooses a registered typed tool. It never receives arbitrary Python,
    filesystem or web access.
-6. `RequestState.execute()` blocks duplicate calls and enforces tool, time and
+7. `RequestState.execute()` blocks duplicate calls and enforces tool, time and
    payload budgets.
-7. Exact count/list tools are rendered deterministically, preserving valid zero.
-8. Finding questions use `search_literature` and return candidate evidence.
-9. The model proposes JSON containing PMID and quotation.
-10. `render_quotes()` checks that every quotation is verbatim text associated
+8. Exact count/list tools are rendered deterministically, preserving valid zero.
+9. Finding questions use `search_literature` and return candidate evidence.
+10. The model proposes JSON containing PMID and quotation.
+11. `render_quotes()` checks that every quotation is verbatim text associated
     with that retrieved PMID. Invented or modified quotes fail validation.
-11. The agent can retry within its limits; otherwise it returns insufficient
+12. The agent can retry within its limits; otherwise it returns insufficient
     evidence rather than a plausible unsupported answer.
-12. The response includes model, provider, elapsed time, filters and tool-call
+13. The response includes model, provider, elapsed time, filters and tool-call
     metadata for the UI.
 
 The answer LLM and BGE embedding model have different jobs. BGE retrieves; the
@@ -580,7 +584,8 @@ minified onto long lines. Read it by symbols:
   distribution.
 - **103–104:** entity tables and role-score disclosure.
 - **105–106:** exact two-concept comparison UI.
-- **107–108:** Ask UI, answer-model disclosure, request and stale-answer guard.
+- **107–110:** Ask question field, progress/evidence preview, streamed answer
+  reader, answer-model disclosure and stale-answer guard.
 - **109:** client-side CSV creation. A historical RIS branch remains unreachable
   because the current UI exposes only CSV.
 - **110:** event wiring for form, clear, scope clear, share link, tabs and theme;
@@ -719,7 +724,8 @@ node tests/ui_regression.cjs
    total is exact.
 6. Use Compare and explicitly say it compares publication overlap, not treatment
    effectiveness.
-7. Open Ask and show the configured model, tool calls and cited evidence.
+7. Open Ask, enter “What do papers report about long COVID fatigue?”, and show
+   the live progress, configured model, tool calls and cited evidence.
 8. End with `/health` and explain lexical/dense readiness and degradation.
 
 ## 15. Honest limitations you should state first

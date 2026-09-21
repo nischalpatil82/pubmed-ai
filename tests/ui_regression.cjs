@@ -33,7 +33,7 @@ function ui(respond = () => ({ answer: 'Mock answer', filters: {} })) {
   // Suppress only boot's network activity; compile and execute all other UI code.
   vm.runInContext(script.replace(/boot\(\);\s*$/, ''), context);
   const run = code => vm.runInContext(code, context);
-  run('Object.assign(S,{q:"example",since:"2019",until:"2022",concept:{concept_id:"D1",concept_name:"One"},view:"ask"})');
+  run('Object.assign(S,{q:"example",since:"2019",until:"2022",concept:{concept_id:"D1",concept_name:"One"},view:"ask",results:{keyword_match_count:1,results:[]}})');
   return { run, node, requests, context };
 }
 
@@ -41,7 +41,7 @@ test('Ask sends scope and warns when HTTP200 answer does not confirm it', async 
   const u = ui();
   await u.run('ask()');
   const request = u.requests[0];
-  assert.equal(request.pathname, '/api/ask');
+  assert.equal(request.pathname, '/api/ask/stream');
   for (const [key, value] of Object.entries({ q: 'example', since_year: '2019', until_year: '2022', concept_id: 'D1' })) {
     assert.equal(request.searchParams.get(key), value, key);
   }
@@ -82,7 +82,7 @@ test('each analytics error is visible without suppressing successful panels', as
 function pendingAsk() {
   let resolve, reject;
   const response = new Promise((yes, no) => { resolve = yes; reject = no; });
-  const u = ui(url => url.pathname === '/api/ask' ? response : { results: [], concepts: [] });
+  const u = ui(url => url.pathname === '/api/ask/stream' ? response : { results: [], concepts: [] });
   return { ...u, resolve, reject };
 }
 
@@ -268,11 +268,20 @@ test('an open article cannot be replaced by an older detail request', async () =
   assert.doesNotMatch(u.node('#work').innerHTML,/Old record/);
 });
 
-test('restored overview loads its analytics without performing an evidence search', async () => {
-  const u = ui(url => url.pathname==='/api/resolve' ? {concepts:[]} : {results:[],total_papers:0});
+test('restored overview loads analytics and the exact keyword-match count', async () => {
+  const u = ui(url => url.pathname==='/api/resolve' ? {concepts:[]} : url.pathname==='/api/search' ? {results:[],keyword_match_count:42} : {results:[],total_papers:0});
   u.node('#q').value='covid'; u.node('#k').value='20';
   await u.run('S.restoreView="overview";search()');
   assert.ok(u.requests.some(r=>r.pathname==='/api/trend'));
-  assert.ok(!u.requests.some(r=>r.pathname==='/api/search'));
+  assert.ok(u.requests.some(r=>r.pathname==='/api/search'));
+  assert.match(u.node('#matchTotal').innerHTML,/42/);
   assert.match(u.node('#work').innerHTML,/Research overview/);
+  assert.match(u.node('#work').innerHTML,/Matching papers/);
+});
+
+test('Research overview is first and Ask exposes the example question', () => {
+  assert.ok(html.indexOf('data-view="overview"') < html.indexOf('data-view="evidence"'));
+  assert.match(html,/view:"overview"/);
+  assert.match(html,/What do papers report about long COVID fatigue\?/);
+  assert.match(html,/\/api\/ask\/stream/);
 });
