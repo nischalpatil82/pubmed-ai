@@ -442,10 +442,12 @@ def api_ask_stream(q: str = Query(..., min_length=3, max_length=4000), model: st
             return
         answer = result.pop("answer", "")
         yield line({"type": "meta", "data": result})
-        words = re.findall(r"\S+\s*", answer)
-        for start in range(0, len(words), 6):
-            yield line({"type": "delta", "text": "".join(words[start:start + 6])})
-            time.sleep(0.015)
+        # Keep the full answer citation-checked before showing any prose, then
+        # reveal it in word-sized updates so the browser can render a readable
+        # live stream without replacing the Ask form on every update.
+        for word in re.findall(r"\S+\s*", answer):
+            yield line({"type": "delta", "text": word})
+            time.sleep(0.025)
         yield line({"type": "done", "data": result})
 
     return StreamingResponse(events(), media_type="application/x-ndjson",
