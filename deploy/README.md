@@ -68,3 +68,11 @@ inventing an answer.
 
 Without the LLM variables the Ask tab is disabled; the other research views work
 normally, since none of them use a language model.
+
+## Automatic application deployment
+
+Pushes to the `covid-files` branch that change `pipeline/`, `deploy/`,
+`requirements.txt`, or the deployment workflow automatically publish the app
+to `Nischalpatil/pubmed-ai`. The GitHub repository must have an Actions secret
+named `HF_TOKEN` with write access to that Space. Routine app deployments keep
+the dataset repository and pinned revision already configured on the Space.
