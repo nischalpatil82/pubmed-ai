@@ -32,6 +32,10 @@ class ModelCallError(RuntimeError):
     """A deployment-safe model error that never includes credentials or payloads."""
 
 
+class ProviderRateLimitError(ModelCallError):
+    """The configured provider cannot generate an answer within this request."""
+
+
 def _provider_messages(messages):
     """Keep only Chat Completions fields accepted by strict providers."""
     clean = []
@@ -176,7 +180,7 @@ def chat(messages, model, timeout, allow_tools=None):
         if response is None or not response.ok:
             status = response.status_code if response is not None else 503
             if status == 429:
-                raise ModelCallError("The answer model has reached its provider rate limit. Please retry shortly.")
+                raise ProviderRateLimitError("The answer model has reached its provider rate limit. Please retry shortly.")
             if status == 400:
                 raise ModelCallError("The answer model could not create a valid research-tool request after retrying: " + _groq_error(response))
             if status in (401, 403):
@@ -217,10 +221,11 @@ def run(question, model=MODEL, max_steps=6, verbose=True, adaptive=True, filters
         if progress:
             progress({"stage": stage, "message": message, **details})
 
-    def finish(answer, refused=False):
+    def finish(answer, refused=False, answer_mode="generated"):
         return {"answer": answer, "refused": refused, "calls": state.calls,
                 "model": model, "provider": config["provider"], "snapshot": state.snapshot,
                 "filters": state.filters, "disclosures": state.disclosures, "usage": usage,
+                "answer_mode": answer_mode,
                 "ms": round((time.monotonic() - state.started) * 1000)}
 
     def execute(name, args):
@@ -283,8 +288,10 @@ def run(question, model=MODEL, max_steps=6, verbose=True, adaptive=True, filters
         question, re.I))
     direct_evidence = evidence_intent and not evidence_comparison
     direct_candidates = []
+    fallback_rows = []
     if direct_evidence:
         result = execute("search_literature", {"query": question, "k": 8})
+        fallback_rows = result.get("results", [])
         if result.get("error") or not any(row.get("has_abstract")
                                            for row in result.get("results", [])):
             return finish("I could not find enough abstract evidence for that question within the selected scope.", True)
@@ -316,6 +323,48 @@ def run(question, model=MODEL, max_steps=6, verbose=True, adaptive=True, filters
             "definition must come from its cited source. Do not add medical advice, unsupported "
             "facts, Markdown or another tool call.\nNumbered evidence:\n" + payload)})
 
+    def rate_limited_answer():
+        """Show only validated source text when a generated explanation is unavailable."""
+        rows = fallback_rows[:]
+        if not rows and sides:
+            # A comparison must show at least one source for each side.
+            rows = [next((row for row in side.get("results", [])
+                          if row.get("has_abstract") and row.get("evidence")), None)
+                    for side in sides]
+            rows = [row for row in rows if row]
+        if not rows:
+            rows = [row for cached in state.cache.values() if isinstance(cached, dict)
+                    for row in cached.get("results", []) if row.get("evidence")]
+        count_question = re.search(r"\b(?:how many|count|total|number of)\b", question, re.I)
+        if not rows and not count_question:
+            try:
+                result = execute("search_literature", {"query": question, "k": 6})
+                rows = result.get("results", [])
+            except ValueError:
+                rows = []
+        proposal = {"evidence": []}
+        for row in rows:
+            pmid = str(row.get("pmid", ""))
+            passage = next((part.get("text", "").strip() for part in row.get("evidence", [])
+                            if part.get("section") == "abstract"
+                            and len(part.get("text", "").strip()) >= 20), "")
+            if pmid not in state.records or not passage:
+                continue
+            proposal["evidence"].append({"pmid": pmid, "quote": passage[:1200]})
+            if len(proposal["evidence"]) == 3:
+                break
+        if proposal["evidence"]:
+            answer = render_quotes(proposal, state.records)
+            state.disclosures.append(
+                "The answer model is temporarily rate-limited. These are original abstract excerpts, "
+                "not a generated explanation. Check each source for relevance or retry Ask later.")
+            return finish(answer, answer_mode="source_excerpts")
+        return finish(
+            "The answer model is temporarily rate-limited. No verified abstract excerpt "
+            "was available for this question and scope. Try Ask later, or use Research "
+            "overview and Evidence to inspect the records.",
+            answer_mode="unavailable")
+
     retried = False
     for step in range(min(max_steps, 8)):
         if (state.remaining() <= 0 or sum(usage[k] for k in ("prompt_tokens", "completion_tokens")) >= int(os.environ.get("PUBMED_TOKEN_BUDGET", "16000"))
@@ -324,8 +373,11 @@ def run(question, model=MODEL, max_steps=6, verbose=True, adaptive=True, filters
         choosing = step == 0 and not (direct_evidence or evidence_comparison)
         emit("planning" if choosing else "writing",
              "Choosing the right research tool" if choosing else "Writing from the verified evidence")
-        msg = chat(messages, model, state.remaining(),
-                   allow_tools=not (direct_evidence or evidence_comparison))
+        try:
+            msg = chat(messages, model, state.remaining(),
+                       allow_tools=not (direct_evidence or evidence_comparison))
+        except ProviderRateLimitError:
+            return rate_limited_answer()
         measured = msg.pop("_usage", {})
         usage["model_calls"] += 1
         for key in ("prompt_tokens", "completion_tokens"):

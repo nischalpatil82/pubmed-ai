@@ -387,6 +387,72 @@ class PipelineTest(unittest.TestCase):
         finally:
             tools.STORE, tools.INDEX, tools.DATASET = old
 
+    def test_rate_limited_answer_shows_verified_excerpts_without_model_claims(self):
+        self.ingest([("a.xml", article(
+            12345, abstract="Participants reported persistent fatigue after COVID-19."))])
+        import tools
+        import agent
+        old = (tools.STORE, tools.INDEX, tools.DATASET)
+        tools.STORE, tools.INDEX, tools.DATASET = paths()
+        excerpt = "Participants reported persistent fatigue after COVID-19."
+        result = {"results": [{"pmid": "12345", "has_abstract": True,
+                               "evidence": [{"section": "abstract", "text": excerpt}]}]}
+        try:
+            with patch("agent.chat", side_effect=agent.ProviderRateLimitError("rate limited")) as model, \
+                    patch("tools.call", return_value=result):
+                answer = agent.run("What do papers report about long COVID fatigue?",
+                                   filters={"since_year": 2020}, adaptive=False)
+            self.assertEqual(model.call_count, 1)
+            self.assertEqual(answer["answer_mode"], "source_excerpts")
+            self.assertFalse(answer["refused"])
+            self.assertIn(excerpt, answer["answer"])
+            self.assertIn("https://pubmed.ncbi.nlm.nih.gov/12345/", answer["answer"])
+            self.assertIn("not a generated explanation", answer["disclosures"][-1])
+            self.assertEqual(answer["calls"][0]["args"]["since_year"], 2020)
+        finally:
+            tools.STORE, tools.INDEX, tools.DATASET = old
+
+    def test_groq_429_is_distinguished_from_other_model_failures(self):
+        self.ingest([("a.xml", article(12345))])
+        import agent
+
+        class Response:
+            status_code = 429
+            ok = False
+            headers = {"Retry-After": "3600"}
+
+        config = {
+            "PUBMED_LLM": "cloud",
+            "PUBMED_ALLOW_CLOUD": "1",
+            "PUBMED_API_BASE": "https://api.groq.com/openai/v1",
+            "PUBMED_API_KEY": "test-key",
+            "PUBMED_CLOUD_MODEL": "openai/gpt-oss-120b",
+        }
+        with patch.dict(os.environ, config), patch("requests.post", return_value=Response()):
+            with self.assertRaises(agent.ProviderRateLimitError):
+                agent.chat([{"role": "user", "content": "question"}],
+                           "openai/gpt-oss-120b", 30)
+
+    def test_rate_limited_generic_question_retrieves_sources_without_planner(self):
+        self.ingest([("a.xml", article(
+            12345, abstract="Participants reported persistent fatigue after COVID-19."))])
+        import tools
+        import agent
+        old = (tools.STORE, tools.INDEX, tools.DATASET)
+        tools.STORE, tools.INDEX, tools.DATASET = paths()
+        result = {"results": [{"pmid": "12345", "has_abstract": True,
+                               "evidence": [{"section": "abstract", "text":
+                                             "Participants reported persistent fatigue after COVID-19."}]}]}
+        try:
+            with patch("agent.chat", side_effect=agent.ProviderRateLimitError("rate limited")), \
+                    patch("tools.call", return_value=result) as search:
+                answer = agent.run("long COVID fatigue", adaptive=False)
+            self.assertEqual(answer["answer_mode"], "source_excerpts")
+            self.assertEqual(search.call_args.args[0], "search_literature")
+            self.assertIn("PMID 12345", answer["answer"])
+        finally:
+            tools.STORE, tools.INDEX, tools.DATASET = old
+
 
 if __name__ == "__main__":
     unittest.main()
