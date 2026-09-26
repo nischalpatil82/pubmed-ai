@@ -293,6 +293,39 @@ test('Ask starts empty instead of copying the evidence query', () => {
   assert.doesNotMatch(u.node('#work').innerHTML, /id="askQuestion" value="covid"/);
 });
 
+test('Ask presents checked claims with readable excerpts and safe PubMed links', () => {
+  const u = ui();
+  const answer = 'Evidence-grounded summary (review the supporting excerpts):\n\n' +
+    'Fatigue was reported in &lt;study&gt; participants. (PMID 12345)\n\n' +
+    '> The paper describes &lt;script&gt;alert(1)&lt;/script&gt; and persistent fatigue.\n\n' +
+    '[PMID 12345](https://pubmed.ncbi.nlm.nih.gov/12345/)\n\n' +
+    'Scope: selected files only';
+  const output = u.run('renderAnswer('+JSON.stringify(answer)+', ["Scope: selected files only"])');
+  assert.match(output, /What the papers found/);
+  assert.match(output, /Main answer/);
+  assert.match(output, /1 finding/);
+  assert.match(output, /class="claim-text"/);
+  assert.match(output, /Read abstract passage/);
+  assert.match(output, /href="https:\/\/pubmed\.ncbi\.nlm\.nih\.gov\/12345\/"/);
+  assert.match(output, /&lt;study&gt;/);
+  assert.doesNotMatch(output, /<script>|Scope: selected files only/);
+  const live = u.run('renderLiveAnswer('+JSON.stringify(answer.split('\n\nScope:')[0])+')');
+  assert.match(live, /class="claim-text"/);
+  assert.match(live, /href="https:\/\/pubmed\.ncbi\.nlm\.nih\.gov\/12345\/"/);
+  assert.doesNotMatch(live, /<script>/);
+});
+
+test('Ask also makes retrieved excerpts and direct counts readable', () => {
+  const u = ui();
+  const excerpt = 'Retrieved abstract excerpts (relevance requires review):\n\n> A relevant abstract excerpt with enough text.\n\n[PMID 7](https://pubmed.ncbi.nlm.nih.gov/7/)';
+  const cited = u.run('renderAnswer('+JSON.stringify(excerpt)+', [])');
+  assert.match(cited, /Retrieved abstract excerpts/);
+  assert.match(cited, /href="https:\/\/pubmed\.ncbi\.nlm\.nih\.gov\/7\/"/);
+  const direct = u.run('renderAnswer("Total papers: 25\\n- Journal: Example; Papers: 10\\nCoverage note: Supplied files only", [])');
+  assert.ok(direct.indexOf('Total papers') < direct.indexOf('Journal: Example'));
+  assert.ok(direct.indexOf('Journal: Example') < direct.indexOf('Coverage note'));
+});
+
 test('researcher table omits the role score', () => {
   const u = ui();
   const output = u.run('table("Researchers","Publication activity",{results:[{name:"Researcher",first_author:2,senior_author:1,papers:4}],total_authors:1},"Researcher","total_authors")');

@@ -270,15 +270,16 @@ def run(question, model=MODEL, max_steps=6, verbose=True, adaptive=True, filters
             return finish("I could not find abstract evidence for both comparison topics within the requested filters.", True)
         messages.append({"role": "user", "content": "Retrieved evidence by comparison side: " + bounded_payload({"results": sides})})
 
-    # Findings questions do not need an LLM to decide that literature search is
-    # the correct tool. Retrieve first, then use one model call to select
-    # verbatim quotations. This lowers latency and stays within free-provider
+    # Findings and explanation questions do not need an LLM to decide that literature search is
+    # the correct tool. Retrieve first, then use one model call to write short
+    # findings linked to verified quotations. This lowers latency and stays within free-provider
     # token/rate budgets much more reliably than plan -> resolve -> search ->
     # answer model loops.
     evidence_intent = bool(re.search(
         r"\b(?:what do (?:papers|studies|research)|what does (?:the )?research|"
         r"report|reports|reported|evidence|finding|findings|association|effect|"
-        r"outcome|risk|benefit|safety|efficacy|symptom|treatment|mechanism)\b",
+        r"outcome|risk|benefit|safety|efficacy|symptom|treatment|mechanism|"
+        r"explain|describe|summari[sz]e|summary|tell me about)\b",
         question, re.I))
     direct_evidence = evidence_intent and not evidence_comparison
     direct_candidates = []
@@ -304,9 +305,15 @@ def run(question, model=MODEL, max_steps=6, verbose=True, adaptive=True, filters
             return finish("I could not find enough abstract evidence for that question within the selected scope.", True)
         messages.append({"role": "user", "content": (
             "Use only the numbered evidence below. Return only this JSON shape: "
-            '{"claims":[{"text":"one concise plain-language finding",'
-            '"source_ids":[1]}]}. Write one to four claims. Every claim must cite '
-            "one to three valid source IDs. Do not add medical advice, unsupported "
+            '{"claims":[{"text":"one clear finding for a general reader",'
+            '"source_ids":[1]}]}. Write one to four claims. The first claim must '
+            "answer the question directly. Use one idea per claim, in one or two "
+            "short sentences. Prefer everyday words; when a medical term is "
+            "essential, explain it briefly using only the supplied evidence. "
+            "Distinguish what one study found from what several studies found. "
+            "If the excerpts disagree or show a limitation, say so plainly. "
+            "Every claim must cite one to three valid source IDs. Any number or "
+            "definition must come from its cited source. Do not add medical advice, unsupported "
             "facts, Markdown or another tool call.\nNumbered evidence:\n" + payload)})
 
     retried = False

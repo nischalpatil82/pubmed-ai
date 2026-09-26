@@ -377,6 +377,13 @@ class PipelineTest(unittest.TestCase):
             self.assertEqual(model.call_count, 1)
             self.assertFalse(model.call_args.kwargs["allow_tools"])
             self.assertEqual(answer["calls"][0]["tool"], "search_literature")
+            with patch("agent.chat", return_value=response) as explanation_model, \
+                    patch("tools.call", return_value=result):
+                explained = agent.run("Explain long COVID fatigue in plain language.",
+                                      adaptive=False)
+            self.assertIn("persistent fatigue", explained["answer"])
+            self.assertEqual(explanation_model.call_count, 1)
+            self.assertEqual(explained["calls"][0]["tool"], "search_literature")
         finally:
             tools.STORE, tools.INDEX, tools.DATASET = old
 
