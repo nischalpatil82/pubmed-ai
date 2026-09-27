@@ -53,5 +53,5 @@
       "ann_ms": 111.99450000276556
     }
   ],
-  "limitations": "Single-process query sample; expand with lead-reviewed biomedical questions before release acceptance."
+  "limitations": "Single-process query sample; expand with domain-reviewed biomedical questions before release acceptance."
 }

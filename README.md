@@ -6,6 +6,7 @@ tests, limitations and a ready-to-use demonstration script.
 
 Build and launch instructions: [pipeline/IMPLEMENTATION.md](pipeline/IMPLEMENTATION.md).
 Completed Kaggle embedding workflow: [kaggle/README.md](kaggle/README.md).
+Windows deployment and automatic code updates: [ops/README.md](ops/README.md).
 
 For the new `covid-files` dataset, see [the current project plan](PROJECT_PLAN.md)
 for agreed requirements, completed work and remaining steps.

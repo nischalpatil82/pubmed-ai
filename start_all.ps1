@@ -37,5 +37,10 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
     }
 }
 # Serving and embedding are explicit separate jobs. No global process termination.
-python "$PSScriptRoot\pipeline\manage.py" serve --dataset "$Dataset" --port $Port
+$VenvPython = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
+if (Test-Path -LiteralPath $VenvPython -PathType Leaf) {
+    & $VenvPython "$PSScriptRoot\pipeline\manage.py" serve --dataset "$Dataset" --port $Port
+} else {
+    python "$PSScriptRoot\pipeline\manage.py" serve --dataset "$Dataset" --port $Port
+}
 exit $LASTEXITCODE

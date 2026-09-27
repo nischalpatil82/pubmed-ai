@@ -1,5 +1,5 @@
 -- =====================================================================
--- The three questions the lead asked, answered in SQL.
+-- Three example research questions, answered in SQL.
 -- Verified against pubmed26n1443 (23,362 articles) - real output in comments.
 -- =====================================================================
 
@@ -45,7 +45,7 @@ ORDER  BY papers DESC;
 
 -- ---------------------------------------------------------------------
 -- Q3  "Top key opinion leaders"
---     A defined, defensible score - not a vibe.
+--     A defined, defensible score rather than a subjective judgement.
 --     Tune the weights WITH the client, then freeze them.
 -- ---------------------------------------------------------------------
 WITH hits AS (

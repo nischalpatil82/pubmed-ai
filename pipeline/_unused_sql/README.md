@@ -8,7 +8,7 @@ Verified against `pubmed26n1443.xml.gz` (23,362 articles, parsed in 15.3s).
 |---|---|
 | `pubmed_ingest.py` | Streams `.xml.gz` → one CSV per table. Constant memory, parallel across files. |
 | `schema.sql` | PostgreSQL DDL sized for ~35M articles / ~250M authorship rows. |
-| `demo_queries.sql` | The lead's three questions answered in SQL, plus the entity-resolution check. |
+| `demo_queries.sql` | Three example questions answered in SQL, plus the entity-resolution check. |
 
 ## Run it
 

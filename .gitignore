@@ -1,5 +1,7 @@
 # Secrets
 llm.env
+.venv/
+ops/logs/
 
 # Source data and build output - too big for git, rebuildable or uploaded
 # separately (see README).

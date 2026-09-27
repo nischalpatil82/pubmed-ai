@@ -183,7 +183,7 @@ A CPU is appropriate for testing ingestion and modest search workloads. Local an
 
 Compare one or more approved cloud models with a local model that demonstrably follows the tool schema and cites provided passages. Select on measured correctness, latency, memory, licensing and total cost. Do not select a model solely because its name includes “medical,” and do not treat a provider's free tier as production capacity.
 
-For retrieval, retain BGE-small as the established baseline. Compare a biomedical retrieval candidate such as NCBI's MedCPT, which provides separate query/article encoders and a reranker. MedCPT's documented biomedical search training makes it relevant to test, not a guaranteed winner for the lead's clinical-trial XML. General and biomedical embedding spaces cannot be mixed; a change of model needs compatible query encoding and a separately versioned index. [^14]
+For retrieval, retain BGE-small as the established baseline. Compare a biomedical retrieval candidate such as NCBI's MedCPT, which provides separate query/article encoders and a reranker. MedCPT's documented biomedical search training makes it relevant to test, not a guaranteed winner for the supplied clinical-trial XML. General and biomedical embedding spaces cannot be mixed; a change of model needs compatible query encoding and a separately versioned index. [^14]
 
 ## 8. Sizing and costs
 
@@ -211,7 +211,7 @@ For company-hosted generation, include amortized hardware or rental hours, power
 
 ## 9. Evaluation and release gates
 
-Create a held-out question set before tuning models. An initial proposal is 150–200 questions, combining lead-provided tasks with difficult cases. Keep tuning and final acceptance examples separate. Have a biomedical reviewer assess scientific support and a data owner verify structured counts; model self-grading alone is insufficient.
+Create a held-out question set before tuning models. An initial proposal is 150–200 questions, combining stakeholder-provided tasks with difficult cases. Keep tuning and final acceptance examples separate. Have a biomedical reviewer assess scientific support and a data owner verify structured counts; model self-grading alone is insufficient.
 
 Include identifier lookup, exact counts, filtered counts, date-sensitive search, synonyms, abbreviations, multiple concepts, no-abstract records, evidence comparisons, missing results, updated/deleted records and questions that the corpus cannot answer. Test malformed XML and instructions embedded in document text as data-handling cases. This is directly relevant when third-party XML becomes model context.
 
@@ -232,7 +232,7 @@ An illustrative performance goal is p95 below two seconds for search/count resul
 
 ## 10. Implementation sequence and decision
 
-First obtain representative PubMed and clinical-trial files, including schema versions, and ask the lead for real questions with examples of acceptable answers. Define whether a count concerns the supplied collection or the whole public database. Confirm expected growth in records, update frequency, user concurrency, hardware, cloud permission and whether private documents will be added.
+First obtain representative PubMed and clinical-trial files, including schema versions, and gather real questions with examples of acceptable answers. Define whether a count concerns the supplied collection or the whole public database. Confirm expected growth in records, update frequency, user concurrency, hardware, cloud permission and whether private documents will be added.
 
 Next correct ordered revisions/deletions, search coverage, metadata filtering and evidence delivery. Add record and chunk versioning, controlled answer rendering and a coherent publication process for updated artifacts. Add clinical-trial ingestion before demonstrating trial status or outcome answers. These tasks retain most of the current project.
 

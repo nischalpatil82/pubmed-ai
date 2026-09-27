@@ -128,7 +128,7 @@ The evaluation harness accepts reviewed `id`, `query`, `relevant_pmids`, optiona
 with `--answers fixed` and `--answers adaptive`; compare reranking separately via
 `--reranker`. `--ann` compares ANN and exact vectors. Sequential p50/p95 and token
 usage do not establish performance at the intended concurrency. The example case
-is a format example, not a labelled accuracy benchmark. Lead-provided questions,
+is a format example, not a labelled accuracy benchmark. Stakeholder-provided questions,
 gold answers and biomedical review are still needed.
 
 Release preparation hashes only the selected complete artifacts without copying

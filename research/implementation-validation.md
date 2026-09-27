@@ -64,7 +64,7 @@ ignored `covid-files/` directory.
 
 ## Still unverified or deferred
 
-Real lead-provided questions, reviewed relevant PMIDs and acceptable answers are
+Real stakeholder-provided questions, reviewed relevant PMIDs and acceptable answers are
 still needed for held-out quality evaluation. The seven-query ANN comparison is
 too small to establish production recall, biomedical relevance or answer
 correctness. Cross-shard BM25 score comparability, intended concurrency,

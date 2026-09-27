@@ -165,7 +165,7 @@ ingestion or new model provider is implied by these lessons.
    spanning files and edge cases. Do not select only the easiest first records.
 4. Correct passage construction, embedding resume behavior, search filtering and
    evidence delivery. Add ANN and test a reranker as measured experiments.
-5. Build a held-out evaluation set from lead-provided real questions plus edge
+5. Build a held-out evaluation set from stakeholder-provided real questions plus edge
    cases; compare simple and adaptive answer workflows and approved providers.
 6. ~~Run the full ingestion and embedding pipeline with checkpoints and monitoring
    after the pilot passes.~~ Complete; full store and index snapshot were verified together.
@@ -180,7 +180,7 @@ percentage accuracy or response-time promise has been established.
 
 ## Open inputs
 
-- Real questions and acceptable answers from the lead, including count scope.
+- Real questions and acceptable answers from stakeholders, including count scope.
 - Target response time, concurrency and available CPU/GPU/RAM.
 - Cloud policy and the intended artifact/deployment destination.
 - The precise identity of the earlier branch if branch organization is needed.

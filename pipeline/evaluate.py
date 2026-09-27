@@ -72,7 +72,7 @@ def ann_benchmark(queries, k=10):
     return {"snapshot": engine.dataset["snapshot"], "nprobes": nprobes,
             "refine_factor": refine, "mean_recall_at_10": float(np.mean(recalls)) if recalls else None,
             "rows": rows,
-            "limitations": "Single-process query sample; expand with lead-reviewed biomedical questions before release acceptance."}
+            "limitations": "Single-process query sample; expand with domain-reviewed biomedical questions before release acceptance."}
 
 
 if __name__ == "__main__":
