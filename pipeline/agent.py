@@ -86,13 +86,30 @@ def _json_answer(content):
     return value
 
 
-def llm_status():
+def _population_death_total_question(question):
+    """Distinguish a pandemic death total from deaths reported in a study."""
+    if not re.search(r"\b(?:covid(?:-19)?|coronavirus|sars-cov-2|pandemic)\b", question, re.I):
+        return False
+    if not re.search(r"\b(?:dead|died|deaths?|fatalities|mortality)\b", question, re.I):
+        return False
+    if not re.search(r"\b(?:how (?:many|much)|number of|total|death toll)\b", question, re.I):
+        return False
+    return not re.search(
+        r"\b(?:in|within|among|from)\s+(?:this|the|a|one)\s+"
+        r"(?:(?:[\w-]+)\s+){0,3}"
+        r"(?:study|trial|paper|article|cohort)\b", question, re.I)
+
+
+def llm_status(provider=None):
     """Return deployment-safe LLM configuration details; never expose a key."""
-    provider = os.environ.get("PUBMED_LLM", "ollama").strip().lower()
+    if provider is not None and provider not in ("cloud", "ollama"):
+        raise ValueError("Choose cloud or ollama as the answer provider")
+    provider = provider or os.environ.get("PUBMED_LLM", "ollama").strip().lower()
     if provider == "cloud":
         model = os.environ.get("PUBMED_CLOUD_MODEL", DEFAULT_CLOUD_MODEL).strip()
         base = os.environ.get("PUBMED_API_BASE", "").strip()
-        allowed = os.environ.get("PUBMED_ALLOW_CLOUD") == "1"
+        allowed = (os.environ.get("PUBMED_LLM", "ollama").strip().lower() == "cloud"
+                   and os.environ.get("PUBMED_ALLOW_CLOUD") == "1")
         has_key = bool(os.environ.get("PUBMED_API_KEY", "").strip())
         return {
             "provider": provider,
@@ -114,9 +131,29 @@ def llm_status():
     }
 
 
-def chat(messages, model, timeout, allow_tools=None):
+def llm_options():
+    """Expose selectable models without assuming a hosted server has Ollama."""
+    cloud = llm_status("cloud")
+    local = llm_status("ollama")
+    try:
+        import ollama
+        installed = ollama.Client(timeout=2).list().get("models", [])
+        names = {item.get("model") or item.get("name") for item in installed}
+        local["configured"] = local["model"] in names
+        local["reason"] = ("" if local["configured"] else
+                           f"Ollama model {local['model']} is not available on this server.")
+    except Exception:
+        local["configured"] = False
+        local["reason"] = "Ollama is not running on this server."
+    cloud["reason"] = "" if cloud["configured"] else "The cloud answer model is not configured."
+    default = "cloud" if cloud["configured"] else "ollama"
+    selected = cloud if default == "cloud" else local
+    return {**selected, "options": [cloud, local]}
+
+
+def chat(messages, model, timeout, allow_tools=None, provider=None):
     timeout = max(1, timeout)
-    config = llm_status()
+    config = llm_status(provider)
     # Once an evidence tool has returned bounded passages, the next model turn
     # only needs to write the cited answer. Re-sending every tool schema wastes
     # roughly two thousand tokens and can exceed free-provider per-minute token
@@ -203,10 +240,10 @@ def chat(messages, model, timeout, allow_tools=None):
 
 
 def run(question, model=MODEL, max_steps=6, verbose=True, adaptive=True, filters=None,
-        progress=None):
+        progress=None, provider=None):
     if not isinstance(question, str) or not 1 <= len(question) <= 4000:
         raise ValueError("Question must contain 1 to 4000 characters")
-    config = llm_status()
+    config = llm_status(provider)
     if config["provider"] == "cloud":
         model = config["model"]
     effective_filters = {**question_filters(question),
@@ -258,6 +295,15 @@ def run(question, model=MODEL, max_steps=6, verbose=True, adaptive=True, filters
         name, args = ("list_papers", {"limit": 1}) if effective_filters else ("corpus_stats", {})
         result = execute(name, args)
         return finish(render_table(result), bool(result.get("error")))
+    if _population_death_total_question(question):
+        return finish(
+            "These PubMed files contain research articles, not a complete record of deaths. "
+            "They cannot give a trustworthy total for how many people died during COVID-19. "
+            "A total needs a place, dates, and a definition: reported COVID-19 deaths or "
+            "estimated excess deaths. Use an official public-health dashboard for a count. "
+            "Here, you can ask what studies report about excess mortality in a specific "
+            "place and period.",
+            refused=True, answer_mode="population_count_guidance")
 
     # Comparison evidence is collected independently before generation.
     compare = re.search(r"\bcompare (.+?) (?:versus|vs\.?|and|with) (.+?)[?.]*$", question, re.I)
@@ -375,7 +421,8 @@ def run(question, model=MODEL, max_steps=6, verbose=True, adaptive=True, filters
              "Choosing the right research tool" if choosing else "Writing from the verified evidence")
         try:
             msg = chat(messages, model, state.remaining(),
-                       allow_tools=not (direct_evidence or evidence_comparison))
+                       allow_tools=not (direct_evidence or evidence_comparison),
+                       provider=config["provider"])
         except ProviderRateLimitError:
             return rate_limited_answer()
         measured = msg.pop("_usage", {})

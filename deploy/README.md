@@ -60,14 +60,17 @@ inventing an answer.
 |---|---|
 | `PUBMED_DATA_REPO` | dataset repo holding `store/` and `index/` |
 | `HF_TOKEN` | only if that dataset is private |
-| `PUBMED_LLM=cloud` | enables the Ask tab |
+| `PUBMED_LLM=cloud` | permits the Groq answer option and makes it the default when configured |
 | `PUBMED_API_KEY` | key for the OpenAI-compatible endpoint |
 | `PUBMED_API_BASE` | e.g. `https://api.groq.com/openai/v1` |
 | `PUBMED_CLOUD_MODEL` | `openai/gpt-oss-120b` for the recommended Groq setup |
 | `PUBMED_ALLOW_CLOUD=1` | explicit consent to send questions and selected passages to the endpoint |
 
-Without the LLM variables the Ask tab is disabled; the other research views work
-normally, since none of them use a language model.
+Ask also lists a local Ollama option. It is enabled only when Ollama and the
+configured `PUBMED_MODEL` are available on the machine running the app. The
+standard Hugging Face Space does not run Ollama, so visitors see that option as
+unavailable. With no configured answer provider, Ask is disabled; the other
+research views continue to work.
 
 ## Automatic application deployment
 

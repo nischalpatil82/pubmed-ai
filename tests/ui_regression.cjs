@@ -48,6 +48,40 @@ test('Ask sends scope and warns when HTTP200 answer does not confirm it', async 
   assert.match(u.node('#work').innerHTML, /did not confirm the requested scope/);
 });
 
+test('Ask defaults to Groq and sends a selected local model without changing main search', async () => {
+  const u = ui();
+  u.run('S.stats={llm:{provider:"cloud",options:[{provider:"cloud",model:"openai/gpt-oss-120b",configured:true},{provider:"ollama",model:"qwen2.5:7b",configured:true}]}};askView()');
+  assert.match(u.node('#work').innerHTML, /GPT OSS 120B via Groq/);
+  assert.match(u.node('#work').innerHTML, /Local Ollama/);
+  assert.match(u.node('#work').innerHTML, /value="cloud" selected/);
+  u.node('#askProvider').value = 'ollama';
+  u.node('#askQuestion').value = 'What do papers report about long COVID fatigue?';
+  u.node('#askProvider').onchange();
+  assert.equal(u.run('S.q'), 'example');
+  assert.equal(u.run('S.askQuestion'), 'What do papers report about long COVID fatigue?');
+  await u.run('ask()');
+  assert.equal(u.requests[0].searchParams.get('provider'), 'ollama');
+});
+
+test('Ask shows but disables a local model absent from the application server', () => {
+  const u = ui();
+  u.run('S.stats={llm:{provider:"cloud",options:[{provider:"cloud",model:"openai/gpt-oss-120b",configured:true},{provider:"ollama",model:"qwen2.5:7b",configured:false,reason:"Ollama is not running on this server."}]}};askView()');
+  assert.match(u.node('#work').innerHTML, /value="ollama"[^>]*disabled/);
+  assert.match(u.node('#work').innerHTML, /Local Ollama — unavailable/);
+});
+
+test('population death-count guidance is shown as guidance, not a paper answer', () => {
+  const u = ui();
+  u.run('S.ask={answer_mode:"population_count_guidance",refused:true,answer:"These files cannot give a trustworthy death total.",filters:{concept_id:"D1",since_year:2019,until_year:2022}};askView()');
+  const output = u.node('#work').innerHTML;
+  assert.match(output, /Why there is no verified death total/);
+  assert.match(output, /WHO COVID-19 deaths dashboard/);
+  assert.match(output, /cannot give a trustworthy death total/);
+  assert.doesNotMatch(output, /Insufficient evidence\./);
+  assert.doesNotMatch(output, /Based on the selected papers/);
+  assert.doesNotMatch(output, /Answer model configured/);
+});
+
 test('comparison sends both year boundaries', async () => {
   const u = ui(() => ({ a: { papers: 1 }, b: { papers: 2 } }));
   u.run('S.concepts=[{concept_id:"D1"},{concept_id:"D2"}];compareView()');

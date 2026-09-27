@@ -159,12 +159,15 @@ implementation does not reuse unchanged embeddings across snapshots.
 
 ## The language model
 
-The default provider is **Ollama**, with local generation model `qwen2.5:7b`
-unless `PUBMED_MODEL` is explicitly set. The dense retrieval model shown in Search
-status is separate from the answer model; Ask shows the model/provider reported
-by the answer response. Historical CPU answers took roughly 95 seconds to five
-minutes in earlier runs, not a current latency promise. Request budgets can stop
-an answer sooner (the agent's default request budget is 120 seconds).
+Ask now lets each user choose between **GPT OSS 120B through Groq** and **local
+Ollama**. When the Groq configuration below is enabled, it is selected by default.
+The local choice uses `qwen2.5:7b` unless `PUBMED_MODEL` is set, and appears as
+unavailable until that model is installed and Ollama is running on the **machine
+hosting the app**. Run `ollama pull qwen2.5:7b` there if needed. A remote Hugging
+Face Space cannot use Ollama running on a visitor's laptop. The dense retrieval
+model shown in Search status is separate from either answer model. Historical
+local CPU answers took roughly 95 seconds to five minutes in earlier runs, not
+a current latency promise; the default answer request budget is 120 seconds.
 
 `start_all.ps1` optionally reads `llm.env` beside the launcher. It accepts only
 literal uppercase `PUBMED_*` assignments; blank lines and full-line `#` comments
@@ -180,6 +183,7 @@ explicit configuration after policy approval: `PUBMED_LLM=cloud`,
 `PUBMED_CLOUD_MODEL`. `llm.env.example` illustrates endpoint/model/key entries but
 does not supply the required cloud consent flag. Do not enable it implicitly.
 Cloud requests can send questions and retrieved source data to that endpoint.
+The API key stays on the server; the browser sends only the provider choice.
 
 Direct Python commands (including the viewer and direct service/agent entrypoints)
 **do not load `llm.env`**: configure their inherited process environment yourself,

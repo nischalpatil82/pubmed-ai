@@ -433,6 +433,48 @@ class PipelineTest(unittest.TestCase):
                 agent.chat([{"role": "user", "content": "question"}],
                            "openai/gpt-oss-120b", 30)
 
+    def test_answer_provider_options_and_per_request_local_routing(self):
+        import agent
+        import ollama
+
+        cloud = {
+            "PUBMED_LLM": "cloud", "PUBMED_ALLOW_CLOUD": "1",
+            "PUBMED_API_BASE": "https://api.groq.com/openai/v1",
+            "PUBMED_API_KEY": "test-key", "PUBMED_CLOUD_MODEL": "openai/gpt-oss-120b",
+        }
+        local_reply = {"message": {"role": "assistant", "content": '{"evidence":[]}'},
+                       "prompt_eval_count": 10, "eval_count": 5}
+        with patch.dict(os.environ, cloud), patch.object(ollama, "Client") as client:
+            client.return_value.list.return_value = {"models": [{"model": "qwen2.5:7b"}]}
+            client.return_value.chat.return_value = local_reply
+            options = agent.llm_options()
+            self.assertEqual(options["provider"], "cloud")
+            self.assertEqual([item["configured"] for item in options["options"]], [True, True])
+            response = agent.chat([{"role": "user", "content": "question"}],
+                                  "qwen2.5:7b", 30, provider="ollama")
+            self.assertEqual(response["content"], '{"evidence":[]}')
+            client.return_value.chat.assert_called_once()
+        with self.assertRaises(ValueError):
+            agent.llm_status("unknown")
+
+    def test_broad_covid_death_total_gets_source_guidance_without_model_call(self):
+        self.ingest([("a.xml", article(12345))])
+        import agent
+        with patch("agent.chat") as model:
+            answer = agent.run("how much dead happened in covid time",
+                               filters={"concept_id": "D000086382"})
+        self.assertTrue(answer["refused"])
+        self.assertEqual(answer["answer_mode"], "population_count_guidance")
+        self.assertIn("not a complete record of deaths", answer["answer"])
+        self.assertIn("reported COVID-19 deaths", answer["answer"])
+        self.assertEqual(answer["filters"]["concept_id"], "D000086382")
+        self.assertEqual(answer["calls"], [])
+        model.assert_not_called()
+        self.assertFalse(agent._population_death_total_question(
+            "How many patients died in this COVID-19 trial?"))
+        self.assertFalse(agent._population_death_total_question(
+            "How many COVID-19 papers are in the collection?"))
+
     def test_rate_limited_generic_question_retrieves_sources_without_planner(self):
         self.ingest([("a.xml", article(
             12345, abstract="Participants reported persistent fatigue after COVID-19."))])

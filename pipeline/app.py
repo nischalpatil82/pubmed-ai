@@ -143,7 +143,7 @@ def api_stats():
     s.update(_readiness())
     try:
         import agent
-        s["llm"] = agent.llm_status()
+        s["llm"] = agent.llm_options()
     except Exception as e:
         s["llm"] = {"configured": False, "provider": "unavailable", "model": None,
                     "privacy": "Answer generation is unavailable.",
@@ -348,8 +348,20 @@ def api_papers(concept_id: str | None = None, journal: str | None = None,
     return out
 
 
+def _answer_provider(agent, provider):
+    if provider is not None and provider not in ("cloud", "ollama"):
+        raise HTTPException(400, "Choose cloud or ollama as the answer provider")
+    options = agent.llm_options()
+    selected = provider or options["provider"]
+    config = next(item for item in options["options"] if item["provider"] == selected)
+    if not config["configured"]:
+        raise HTTPException(503, config["reason"])
+    return selected
+
+
 @app.get("/api/ask")
 def api_ask(q: str = Query(..., min_length=3, max_length=4000), model: str | None = None,
+            provider: str | None = None,
             concept_id: str | None = None, since_year: int | None = None,
             until_year: int | None = None):
     """
@@ -368,9 +380,10 @@ def api_ask(q: str = Query(..., min_length=3, max_length=4000), model: str | Non
         import agent
     except Exception as e:
         raise HTTPException(503, f"agent unavailable: {e}")
+    selected = _answer_provider(agent, provider)
     try:
         out, ms = _timed(agent.run, q, model or agent.MODEL, 6, False,
-                         filters=filters or None)
+                         filters=filters or None, provider=selected)
     except Exception as e:
         detail = str(e) if isinstance(e, getattr(agent, "ModelCallError", RuntimeError)) else "The answer could not be completed. Please retry."
         raise HTTPException(503, detail)
@@ -385,6 +398,7 @@ def api_ask(q: str = Query(..., min_length=3, max_length=4000), model: str | Non
 
 @app.get("/api/ask/stream")
 def api_ask_stream(q: str = Query(..., min_length=3, max_length=4000), model: str | None = None,
+                   provider: str | None = None,
                    concept_id: str | None = None, since_year: int | None = None,
                    until_year: int | None = None):
     """Stream truthful work stages, then the citation-checked answer text."""
@@ -392,6 +406,8 @@ def api_ask_stream(q: str = Query(..., min_length=3, max_length=4000), model: st
     filters = {k: v for k, v in (("concept_id", concept_id),
                                  ("since_year", since_year),
                                  ("until_year", until_year)) if v is not None}
+    import agent
+    selected = _answer_provider(agent, provider)
 
     def line(value):
         return json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
@@ -408,7 +424,8 @@ def api_ask_stream(q: str = Query(..., min_length=3, max_length=4000), model: st
             try:
                 import agent
                 out = agent.run(q, model or agent.MODEL, 6, False,
-                                filters=filters or None, progress=emit)
+                                filters=filters or None, progress=emit,
+                                provider=selected)
                 out.pop("trace", None)
                 out["ms"] = round((time.perf_counter() - started) * 1000)
                 out.setdefault("model", model or agent.MODEL)
