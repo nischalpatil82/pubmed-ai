@@ -1,0 +1,462 @@
+{
+  "snapshot": "6f269c0288fb98ea0c96",
+  "scope": {
+    "concept_id": "D000086382",
+    "since_year": 2020,
+    "until_year": 2024
+  },
+  "panels": {
+    "trend": {
+      "ms": 2716.589,
+      "data": {
+        "total_papers": 109655,
+        "note": "Scope: COVID-19 (D000086382).",
+        "results": [
+          {
+            "pub_year": 2020,
+            "papers": 13862
+          },
+          {
+            "pub_year": 2021,
+            "papers": 31972
+          },
+          {
+            "pub_year": 2022,
+            "papers": 24120
+          },
+          {
+            "pub_year": 2023,
+            "papers": 23600
+          },
+          {
+            "pub_year": 2024,
+            "papers": 16101
+          }
+        ]
+      }
+    },
+    "study_types": {
+      "ms": 987.627,
+      "data": {
+        "total_types": 63,
+        "note": "Scope: COVID-19 (D000086382).",
+        "results": [
+          {
+            "type_name": "Journal Article",
+            "papers": 97410
+          },
+          {
+            "type_name": "Research Support, Non-U.S. Gov't",
+            "papers": 19827
+          },
+          {
+            "type_name": "Review",
+            "papers": 11640
+          },
+          {
+            "type_name": "Letter",
+            "papers": 8403
+          },
+          {
+            "type_name": "Comment",
+            "papers": 5137
+          },
+          {
+            "type_name": "Research Support, N.I.H., Extramural",
+            "papers": 5067
+          },
+          {
+            "type_name": "Case Reports",
+            "papers": 4976
+          },
+          {
+            "type_name": "Editorial",
+            "papers": 3204
+          },
+          {
+            "type_name": "Observational Study",
+            "papers": 3073
+          },
+          {
+            "type_name": "Systematic Review",
+            "papers": 2348
+          },
+          {
+            "type_name": "Multicenter Study",
+            "papers": 2103
+          },
+          {
+            "type_name": "Randomized Controlled Trial",
+            "papers": 1345
+          },
+          {
+            "type_name": "Meta-Analysis",
+            "papers": 1336
+          },
+          {
+            "type_name": "Research Support, U.S. Gov't, Non-P.H.S.",
+            "papers": 1106
+          },
+          {
+            "type_name": "Comparative Study",
+            "papers": 963
+          },
+          {
+            "type_name": "English Abstract",
+            "papers": 856
+          },
+          {
+            "type_name": "Research Support, U.S. Gov't, P.H.S.",
+            "papers": 654
+          },
+          {
+            "type_name": "News",
+            "papers": 479
+          },
+          {
+            "type_name": "Clinical Trial",
+            "papers": 297
+          },
+          {
+            "type_name": "Clinical Trial Protocol",
+            "papers": 232
+          }
+        ]
+      }
+    },
+    "cited": {
+      "ms": 3550.83,
+      "data": {
+        "note": "Scope: COVID-19 (D000086382).",
+        "caveat": "Counts citations from papers inside this corpus only. A landmark paper cited mostly by work outside the selected files will score low.",
+        "results": [
+          {
+            "pmid": "32142651",
+            "title": "SARS-CoV-2 Cell Entry Depends on ACE2 and TMPRSS2 and Is Blocked by a Clinically Proven Protease Inhibitor.",
+            "pub_year": 2020,
+            "journal": "Cell",
+            "times_cited": 3430
+          },
+          {
+            "pmid": "32015507",
+            "title": "A pneumonia outbreak associated with a new coronavirus of probable bat origin.",
+            "pub_year": 2020,
+            "journal": "Nature",
+            "times_cited": 3341
+          },
+          {
+            "pmid": "32031570",
+            "title": "Clinical Characteristics of 138 Hospitalized Patients With 2019 Novel Coronavirus-Infected Pneumonia in Wuhan, China.",
+            "pub_year": 2020,
+            "journal": "JAMA",
+            "times_cited": 3121
+          },
+          {
+            "pmid": "32091533",
+            "title": "Characteristics of and Important Lessons From the Coronavirus Disease 2019 (COVID-19) Outbreak in China: Summary of a Report of 72\u202f314 Cases From the Chinese Center for Disease Control and Prevention.",
+            "pub_year": 2020,
+            "journal": "JAMA",
+            "times_cited": 2620
+          },
+          {
+            "pmid": "31995857",
+            "title": "Early Transmission Dynamics in Wuhan, China, of Novel Coronavirus-Infected Pneumonia.",
+            "pub_year": 2020,
+            "journal": "N Engl J Med",
+            "times_cited": 2042
+          },
+          {
+            "pmid": "32015508",
+            "title": "A new coronavirus associated with human respiratory disease in China.",
+            "pub_year": 2020,
+            "journal": "Nature",
+            "times_cited": 1694
+          },
+          {
+            "pmid": "32087114",
+            "title": "An interactive web-based dashboard to track COVID-19 in real time.",
+            "pub_year": 2020,
+            "journal": "Lancet Infect Dis",
+            "times_cited": 1465
+          },
+          {
+            "pmid": "32155789",
+            "title": "Immediate Psychological Responses and Associated Factors during the Initial Stage of the 2019 Coronavirus Disease (COVID-19) Epidemic among the General Population in China.",
+            "pub_year": 2020,
+            "journal": "Int J Environ Res Public Health",
+            "times_cited": 1238
+          },
+          {
+            "pmid": "32325026",
+            "title": "Endothelial cell infection and endotheliitis in COVID-19.",
+            "pub_year": 2020,
+            "journal": "Lancet",
+            "times_cited": 1039
+          },
+          {
+            "pmid": "33237286",
+            "title": "UniProt: the universal protein knowledgebase in 2021.",
+            "pub_year": 2021,
+            "journal": "Nucleic Acids Res",
+            "times_cited": 1019
+          },
+          {
+            "pmid": "32020029",
+            "title": "Remdesivir and chloroquine effectively inhibit the recently emerged novel coronavirus (2019-nCoV) in vitro.",
+            "pub_year": 2020,
+            "journal": "Cell Res",
+            "times_cited": 890
+          },
+          {
+            "pmid": "32073213",
+            "title": "Abnormal coagulation parameters are associated with poor prognosis in patients with novel coronavirus pneumonia.",
+            "pub_year": 2020,
+            "journal": "J Thromb Haemost",
+            "times_cited": 871
+          },
+          {
+            "pmid": "32161940",
+            "title": "Dysregulation of Immune Response in Patients With Coronavirus 2019 (COVID-19) in Wuhan, China.",
+            "pub_year": 2020,
+            "journal": "Clin Infect Dis",
+            "times_cited": 806
+          },
+          {
+            "pmid": "32150748",
+            "title": "The Incubation Period of Coronavirus Disease 2019 (COVID-19) From Publicly Reported Confirmed Cases: Estimation and Application.",
+            "pub_year": 2020,
+            "journal": "Ann Intern Med",
+            "times_cited": 743
+          },
+          {
+            "pmid": "32101510",
+            "title": "Correlation of Chest CT and RT-PCR Testing for Coronavirus Disease 2019 (COVID-19) in China: A Report of 1014 Cases.",
+            "pub_year": 2020,
+            "journal": "Radiology",
+            "times_cited": 728
+          },
+          {
+            "pmid": "32346093",
+            "title": "The trinity of COVID-19: immunity, inflammation and intervention.",
+            "pub_year": 2020,
+            "journal": "Nat Rev Immunol",
+            "times_cited": 727
+          },
+          {
+            "pmid": "32159775",
+            "title": "Detection of SARS-CoV-2 in Different Types of Clinical Specimens.",
+            "pub_year": 2020,
+            "journal": "JAMA",
+            "times_cited": 727
+          },
+          {
+            "pmid": "36639608",
+            "title": "Long COVID: major findings, mechanisms and recommendations.",
+            "pub_year": 2023,
+            "journal": "Nat Rev Microbiol",
+            "times_cited": 725
+          },
+          {
+            "pmid": "32081636",
+            "title": "Severe acute respiratory syndrome coronavirus 2 (SARS-CoV-2) and coronavirus disease-2019 (COVID-19): The epidemic and the challenges.",
+            "pub_year": 2020,
+            "journal": "Int J Antimicrob Agents",
+            "times_cited": 674
+          },
+          {
+            "pmid": "32074444",
+            "title": "SARS-CoV-2 Viral Load in Upper Respiratory Specimens of Infected Patients.",
+            "pub_year": 2020,
+            "journal": "N Engl J Med",
+            "times_cited": 665
+          }
+        ]
+      }
+    },
+    "trials": {
+      "ms": 1264.59,
+      "data": {
+        "total_links": 1694,
+        "note": "Scope: COVID-19 (D000086382).",
+        "caveat": "Only explicitly recorded NCT links are included. This is not a substitute for the ClinicalTrials.gov corpus.",
+        "results": [
+          {
+            "pmid": "37095285",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT03098329",
+            "title": "Effectiveness of Incentivized Peer Referral to Increase Enrollment in a Community-Based Chlamydia Screening and Treatment Study Among Young Black Men.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "36066025",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT04479332",
+            "title": "Using a telemedicine-assisted airway model to improve the communication and teamwork of tracheal intubation during the coronavirus disease 2019 pandemic.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "36066025",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT04591873",
+            "title": "Using a telemedicine-assisted airway model to improve the communication and teamwork of tracheal intubation during the coronavirus disease 2019 pandemic.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "36367717",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT04585269",
+            "title": "Factors Associated with COVID\u201119 Vaccine Uptake Among Adolescents and Young Adults Recently Diagnosed with Cancer.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "36445625",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT04699227",
+            "title": "Effect of Remote Ischaemic Conditioning on the Inflammatory Cytokine Cascade of COVID-19 (RIC in COVID-19): a Randomized Controlled Trial.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "37354201",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT03239977",
+            "title": "A Randomized Clinical Trial of Online Social Intelligence Training With Custodial Grandmothers.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "37466379",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT03677661",
+            "title": "Moving from the clinic to telehealth during the COVID-19 pandemic - a pilot clinical trial comparing in-clinic rehabilitation versus telerehabilitation for persisting symptoms following a mild Traumatic brain injury.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "37338929",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT05321004",
+            "title": "Barriers to and Facilitators of Key Stakeholders Influencing Successful Digital Implementation of Remote Monitoring Solutions: Mixed Methods Analysis.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "37846935",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT05178212",
+            "title": "The Predictive Validity of the Berlin Definition of Acute Respiratory Distress Syndrome for Patients With COVID-19-Related Respiratory Failure Treated With High-Flow Nasal Oxygen: A Multicenter, Prospective Cohort Study.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "37872763",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT05348746",
+            "title": "Impact of the COVID-19 pandemic on malaria in pregnancy indicators in Northern Uganda: a joinpoint regression analysis.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "37647517",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT04380896",
+            "title": "Socioeconomic and Demographic Risk Factors for SARS-CoV-2 Seropositivity Among Healthcare Workers in a UK Hospital: A Prospective Cohort Study.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "37863398",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT03545321",
+            "title": "Pharmacy staff-reported adaptations to naloxone provision and over-the-counter (OTC) syringe sales during the COVID-19 pandemic: Experiences across multiple states and 2 pharmacy chains.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "37778363",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT05041907",
+            "title": "Antiviral efficacy of molnupiravir versus ritonavir-boosted nirmatrelvir in patients with early symptomatic COVID-19 (PLATCOV): an open-label, phase 2, randomised, controlled, adaptive trial.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "37853427",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT04565509",
+            "title": "COVID-19 Related Facilitators and Barriers to In-Person Learning for Children With Intellectual and Development Disabilities: A Follow-Up.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "38194247",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT05001542",
+            "title": "Digital Interventions for Stress Among Frontline Health Care Workers: Results From a Pilot Feasibility Cohort Trial.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "37996071",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT05142319",
+            "title": "Variant-Specific IgA Protects Against Omicron Infection.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "38103462",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT04399252",
+            "title": "Efficacy of probiotic treatment as post-exposure prophylaxis for COVID-19: A double-blind, Placebo-Controlled Randomized trial.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "38200486",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT05234281",
+            "title": "First trans-diagnostic experiences with a novel micro-choice based concentrated group rehabilitation for patients with low back pain, long COVID, and type 2 diabetes: a pilot study.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "37948759",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT04501978",
+            "title": "Effect of Neutralizing Monoclonal Antibody Treatment on Early Trajectories of Virologic and Immunologic Biomarkers in Patients Hospitalized With COVID-19.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "37955825",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT04988152",
+            "title": "Pharmacokinetics, Safety, and Tolerability of Anti-SARS-CoV-2 Monoclonal Antibody, Sotrovimab, Delivered Intravenously or Intramuscularly in Japanese and Caucasian Healthy Volunteers.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "38188690",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT05620160",
+            "title": "Leritrelvir for the treatment of mild or moderate COVID-19 without co-administered ritonavir: a multicentre randomised, double-blind, placebo-controlled phase 3 trial.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "38195390",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT04571684",
+            "title": "Assessing COVID-related concerns and their impact on antenatal and delivery care among pregnant women living with HIV in Kenya: a brief report.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "38171619",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT04979208",
+            "title": "Social and clinical vulnerability in stroke and STEMI management during the COVID-19 pandemic: a registry-based study.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "37960969",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT04557098",
+            "title": "Incidence, timing, and management of infections in patients receiving teclistamab for the treatment of relapsed/refractory multiple myeloma in the MajesTEC-1 study.",
+            "pub_year": 2024
+          },
+          {
+            "pmid": "37960969",
+            "databank": "ClinicalTrials.gov",
+            "accession": "NCT03145181",
+            "title": "Incidence, timing, and management of infections in patients receiving teclistamab for the treatment of relapsed/refractory multiple myeloma in the MajesTEC-1 study.",
+            "pub_year": 2024
+          }
+        ]
+      }
+    }
+  }
+}

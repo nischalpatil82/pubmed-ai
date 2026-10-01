@@ -1,0 +1,9 @@
+{
+  "snapshot": "6f269c0288fb98ea0c96",
+  "selected_records": 20,
+  "records_equal": true,
+  "first_verification_ms": 2134.908,
+  "source_scan_ms": 98.615,
+  "indexed_lookup_ms": 75.577,
+  "note": "Server calculation only; OS caches may be warm. Not full search latency."
+}

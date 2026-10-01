@@ -1,0 +1,48 @@
+{
+  "snapshot": "6f269c0288fb98ea0c96",
+  "scope": {
+    "concept_id": "D000086382",
+    "since_year": 2020,
+    "until_year": 2024
+  },
+  "panels": {
+    "trend": {
+      "first_request_ms": 741.531,
+      "repeated_request_ms": 0.155,
+      "rows": 5,
+      "totals": {
+        "total_papers": 109655
+      },
+      "raw_request_ms": 1993.381,
+      "raw_results_equal": true
+    },
+    "study_types": {
+      "first_request_ms": 227.568,
+      "repeated_request_ms": 0.268,
+      "rows": 20,
+      "totals": {
+        "total_types": 63
+      },
+      "raw_request_ms": 875.711,
+      "raw_results_equal": true
+    },
+    "cited": {
+      "first_request_ms": 1116.702,
+      "repeated_request_ms": 0.461,
+      "rows": 20,
+      "totals": {},
+      "raw_request_ms": 2897.226,
+      "raw_results_equal": true
+    },
+    "trials": {
+      "first_request_ms": 583.267,
+      "repeated_request_ms": 0.394,
+      "rows": 20,
+      "totals": {
+        "total_links": 1694
+      },
+      "raw_request_ms": 1697.855,
+      "raw_results_equal": true
+    }
+  }
+}

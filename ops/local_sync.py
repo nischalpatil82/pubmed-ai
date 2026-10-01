@@ -105,6 +105,22 @@ def port_busy(port: int) -> bool:
         return connection.connect_ex(("127.0.0.1", port)) == 0
 
 
+def prepare_performance(manifest: Path, env: dict[str, str], output) -> None:
+    if env.get("PUBMED_PREPARE_PERFORMANCE", "1") == "0":
+        return
+    LOGGER.info("Checking optional performance indexes; first preparation may take several minutes")
+    try:
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "pipeline" / "manage.py"), "performance",
+             "--dataset", str(manifest)], cwd=ROOT, env=env, stdout=output,
+            stderr=subprocess.STDOUT, timeout=1800,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), check=False)
+        if result.returncode:
+            LOGGER.warning("Performance preparation incomplete; serving with original-data fallback")
+    except (OSError, subprocess.TimeoutExpired):
+        LOGGER.warning("Performance preparation unavailable; serving with original-data fallback")
+
+
 def start_server(manifest: Path, port: int) -> subprocess.Popen[bytes]:
     if port_busy(port):
         raise RuntimeError(f"Port {port} is already in use; stop the other server first")
@@ -112,10 +128,12 @@ def start_server(manifest: Path, port: int) -> subprocess.Popen[bytes]:
     logs.mkdir(parents=True, exist_ok=True)
     output = (logs / "server.log").open("ab")
     try:
+        env = local_environment()
+        prepare_performance(manifest, env, output)
         process = subprocess.Popen(
             [sys.executable, str(ROOT / "pipeline" / "manage.py"), "serve",
              "--dataset", str(manifest), "--port", str(port)],
-            cwd=ROOT, env=local_environment(), stdout=output, stderr=subprocess.STDOUT,
+            cwd=ROOT, env=env, stdout=output, stderr=subprocess.STDOUT,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     finally:

@@ -158,6 +158,82 @@ New source snapshots are isolated under a separate dataset root. Verify and
 index them before switching the manifest used by the service. The current
 implementation does not reuse unchanged embeddings across snapshots.
 
+## Search and Research overview performance
+
+The service caches deterministic search and analytics responses for five minutes,
+using up to 16 MiB per server process. Keys include the dataset snapshot, concept,
+inclusive year bounds, result limit and retrieval settings. Identical concurrent
+requests share one calculation. Failed requests are retried normally, and Ask
+model calls are never cached. Set `PUBMED_CACHE_MB=0` to disable this cache or use
+a value up to 64 to change its byte budget. Restarting the service clears it.
+
+Research overview loads independently of ranked search and displays each panel
+as it finishes. Pending counts display as unavailable until computed. The first
+request for a new scope still scans the relevant tables; caching does not change
+which records count or reduce the ANN search accuracy settings. Search reads
+article card metadata once and fetches vector passages only for selected papers
+(or reranking candidates).
+
+Run `python ops/benchmark_views.py` on the application server to measure first
+and repeated overview calculations without invoking an answer model or loading
+the search engine. These timings exclude browser/network costs. Updating code
+and restarting is required for an existing deployment to use these changes;
+the dataset and embeddings do not need rebuilding.
+
+For faster first requests to the most-cited panel, build the optional citation
+summary once after downloading or creating a dataset:
+
+```powershell
+python pipeline/manage.py analytics --dataset covid-files/dataset.json
+```
+
+This derives counts from the existing references and leaves article tables,
+dataset selection and embeddings unchanged. It writes a checksummed summary
+under the selected index's `analytics` directory. The app verifies its snapshot,
+source footer, schema and checksum before first use, then reuses that validation
+while the files remain unchanged. Missing, damaged or stale summaries use the
+raw reference calculation. Valid summaries are included in newly prepared
+release inventories; older releases continue to work without them.
+
+Topic membership tables are also reused across search and analytics panels,
+with a separate 32 MiB retained-data budget per process. Each panel still
+applies its own year bounds. Set `PUBMED_SCOPE_CACHE_MB=0` to disable reuse or
+choose a budget up to 128 MiB. Very large topics can exceed the cache budget
+and will be recalculated; this budget is not a limit on total query memory.
+Citation and registry-link lists use stable paper-ID tie breaks so equal values
+do not shuffle when switching between cached and raw execution.
+
+Use `python ops/benchmark_views.py --concept-id D000086382 --compare-raw` to
+compare the optimization against raw calculations on the same installation.
+The benchmark checks that the complete panel responses match. The process and
+operating-system file caches may already be warm; timings exclude browser costs.
+
+To prepare both the citation summary and indexed article lookup:
+
+```powershell
+python pipeline/manage.py performance --dataset covid-files/dataset.json
+```
+
+The article lookup uses a small SQLite PMID index and a Parquet copy with 1,000-
+record groups, so fetching selected records reads only their groups and requested
+columns. It uses about 2.2 GB of additional disk on the full snapshot, with a
+2 GB free-space reserve. Preparation streams batches, validates row counts and
+source identity, and publishes the files atomically. Missing, stale or damaged
+indexes fall back to the original article scan. Valid lookup files are included
+in release inventories; serving does not create them automatically on Spaces.
+
+Keyword search checks shard metadata before scoring and skips shards with no
+eligible papers. Partial top-k selection replaces full sorting while retaining
+historical score ties, exact match counts, and filters. ANN parameters are unchanged.
+Overview applies year filters before topic joins and loads article titles only
+for returned citation/trial rows. To save the actual query plans for inspection,
+add `--plans-dir ops/logs/query-plans` to the overview benchmark command.
+
+The Windows updater now prepares optional performance indexes before starting
+its server. See [Windows automatic updates](ops/README.md) for the one-time task
+activation and restart instructions; local file edits only reach other machines
+after a tested commit is pushed.
+
 ## The language model
 
 Ask now lets each user choose between **GPT OSS 120B through Groq** and **local

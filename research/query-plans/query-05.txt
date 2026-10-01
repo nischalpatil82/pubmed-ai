@@ -1,0 +1,48 @@
+UNOPTIMIZED
+UNIQUE[maintain_order: false, keep_strategy: Any] BY None
+  UNION[maintain_order: true]
+    PLAN 0:
+      SELECT [col("pmid")]
+        FILTER col("descriptor_ui").is_in([["D000086382", "D000094024"]])
+        FROM
+          Parquet SCAN [C:/Users/User/Downloads/pubmed-ai/covid-files/stores/6f269c0288fb98ea0c96/mesh_headings.parquet]
+          PROJECT */5 COLUMNS
+          ESTIMATED ROWS: 18582442
+    PLAN 1:
+      SELECT [col("pmid")]
+        FILTER col("substance_ui").is_in([["D000086382", "D000094024"]])
+        FROM
+          Parquet SCAN [C:/Users/User/Downloads/pubmed-ai/covid-files/stores/6f269c0288fb98ea0c96/substances.parquet]
+          PROJECT */4 COLUMNS
+          ESTIMATED ROWS: 3224288
+    PLAN 2:
+      SELECT [col("pmid")]
+        FILTER col("term").str.strip_chars([null]).str.to_lowercase().is_in([["2019-ncov infections", "covid-19 virus disease", … "disease 2019, coronavirus"]])
+        FROM
+          Parquet SCAN [C:/Users/User/Downloads/pubmed-ai/covid-files/stores/6f269c0288fb98ea0c96/keywords.parquet]
+          PROJECT */3 COLUMNS
+          ESTIMATED ROWS: 11642048
+  END UNION[maintain_order: true]
+
+OPTIMIZED
+UNIQUE[maintain_order: false, keep_strategy: Any] BY None
+  UNION[maintain_order: false]
+    PLAN 0:
+      simple π 1/1 ["pmid"]
+        Parquet SCAN [C:/Users/User/Downloads/pubmed-ai/covid-files/stores/6f269c0288fb98ea0c96/mesh_headings.parquet]
+        PROJECT 2/5 COLUMNS
+        SELECTION: col("descriptor_ui").is_in([["D000086382", "D000094024"]])
+        ESTIMATED ROWS: 18582442
+    PLAN 1:
+      simple π 1/1 ["pmid"]
+        Parquet SCAN [C:/Users/User/Downloads/pubmed-ai/covid-files/stores/6f269c0288fb98ea0c96/substances.parquet]
+        PROJECT 2/4 COLUMNS
+        SELECTION: col("substance_ui").is_in([["D000086382", "D000094024"]])
+        ESTIMATED ROWS: 3224288
+    PLAN 2:
+      simple π 1/1 ["pmid"]
+        Parquet SCAN [C:/Users/User/Downloads/pubmed-ai/covid-files/stores/6f269c0288fb98ea0c96/keywords.parquet]
+        PROJECT 2/3 COLUMNS
+        SELECTION: col("term").str.strip_chars([null]).str.to_lowercase().is_in([["2019-ncov infections", "covid-19 virus disease", … "disease 2019, coronavirus"]])
+        ESTIMATED ROWS: 11642048
+  END UNION[maintain_order: false]

@@ -18,10 +18,15 @@ import threading
 from typing import Any
 
 import polars as pl
+from scope_cache import ScopeCache
+from analytics_index import citation_counts_path
+from article_lookup import article_records
 
 from dataset import paths, read_json
 
 STORE, INDEX, DATASET = paths()
+_scope_cache = ScopeCache(
+    max_bytes=max(0, min(int(os.environ.get("PUBMED_SCOPE_CACHE_MB", "32")), 128)) * 1024 * 1024)
 
 
 def _t(name: str) -> pl.LazyFrame:
@@ -235,7 +240,7 @@ def _descendants(concept_id: str) -> tuple[str, ...]:
     return tuple(sorted(set(ids) | {concept_id}))
 
 
-def _pmids_for(concept_id: str, expand: bool = True) -> pl.LazyFrame:
+def _pmids_query(concept_id: str, expand: bool = True) -> pl.LazyFrame:
     """
     All PMIDs carrying this concept - MeSH topic, substance, or author keyword.
 
@@ -258,6 +263,14 @@ def _pmids_for(concept_id: str, expand: bool = True) -> pl.LazyFrame:
     return pl.concat([mesh, sub, keywords]).unique()
 
 
+def _pmids_for(concept_id: str, expand: bool = True) -> pl.LazyFrame:
+    # Topic membership does not depend on publication-year bounds. Each caller
+    # still applies its own years after joining this deduplicated PMID table.
+    key = (str(STORE), str(INDEX), DATASET["snapshot"], concept_id, expand)
+    frame = _scope_cache.get_or_compute(key, lambda: _collect_heavy(_pmids_query(concept_id, expand)))
+    return frame.lazy()
+
+
 def concept_scope(concept_id: str, expand: bool = True) -> dict:
     """What a scoped query actually covered - report this, never assume it."""
     ids = _descendants(concept_id) if expand else (concept_id,)
@@ -278,12 +291,12 @@ def _scoped(concept_id: str | None, since_year: int | None,
             expand: bool = True, until_year: int | None = None) -> pl.LazyFrame:
     validate_years(since_year, until_year)
     arts = _t("articles")
-    if concept_id:
-        arts = arts.join(_pmids_for(concept_id, expand), on="pmid", how="inner")
     if since_year is not None:
         arts = arts.filter(pl.col("pub_year") >= since_year)
     if until_year is not None:
         arts = arts.filter(pl.col("pub_year") <= until_year)
+    if concept_id:
+        arts = arts.join(_pmids_for(concept_id, expand), on="pmid", how="inner")
     return arts
 
 
@@ -553,7 +566,7 @@ def article_detail(pmid: str) -> dict:
     which substances it mentions.
     """
     pmid = str(pmid).strip()
-    art = (_t("articles").filter(pl.col("pmid") == pmid)
+    art = (article_records(STORE, INDEX, DATASET["snapshot"], [pmid]).lazy()
            .join(_t("journals").select("nlm_id", "medline_ta",
                                        pl.col("title").alias("journal_title"),
                                        pl.col("country").alias("journal_country")),
@@ -601,14 +614,26 @@ def article_detail(pmid: str) -> dict:
 @functools.lru_cache(maxsize=1)
 def _cached_corpus_stats() -> dict:
     """What is actually loaded. Call this when asked about coverage or scope."""
-    arts = _t("articles").select("pmid", "pub_year", pl.col("abstract").is_not_null().alias("has_abstract")).collect()
+    # Parquet null counts describe the same is-not-null test without decoding
+    # gigabytes of abstract text. Older files without statistics use a scan.
+    import pyarrow.parquet as pq
+    metadata = pq.read_metadata(STORE / "articles.parquet")
+    abstract_column = metadata.schema.names.index("abstract")
+    statistics = [metadata.row_group(i).column(abstract_column).statistics
+                  for i in range(metadata.num_row_groups)]
+    if all(stat is not None and stat.has_null_count for stat in statistics):
+        without_abstract = sum(stat.null_count for stat in statistics)
+    else:
+        without_abstract = (_t("articles").select(pl.col("abstract").null_count())
+                            .collect(engine="streaming").item())
+    arts = _t("articles").select("pub_year").collect(engine="streaming")
     yr = arts["pub_year"].drop_nulls()
     return {"articles": arts.height,
-            "with_abstract": int(arts["has_abstract"].sum()),
-            "without_abstract": int((~arts["has_abstract"]).sum()),
+            "with_abstract": metadata.num_rows - without_abstract,
+            "without_abstract": without_abstract,
             "dataset": DATASET,
             "coverage_note": "Selected source records only; not complete PubMed or full-text coverage. Author identities are provisional.",
-            "journals": _t("journals").collect().height,
+            "journals": _t("journals").select(pl.len()).collect().item(),
             # Two different numbers that are easy to confuse, so report both.
             # authorship_rows counts one row per author PER PAPER (7.2x articles);
             # authors counts distinct people. Showing the first under the label
@@ -637,8 +662,16 @@ def get_articles(pmids: list[str], concept_id: str | None = None,
     concept_id, note, err = _coerce_concept(concept_id)
     if err:
         return {"error": err, "results": []}
-    res = (_scoped(concept_id, since_year, until_year=until_year)
-           .filter(pl.col("pmid").is_in(pmids))
+    validate_years(since_year, until_year)
+    arts = article_records(STORE, INDEX, DATASET["snapshot"], pmids,
+                           ["pmid", "title", "abstract", "pub_year", "nlm_id", "doi"]).lazy()
+    if since_year is not None:
+        arts = arts.filter(pl.col("pub_year") >= since_year)
+    if until_year is not None:
+        arts = arts.filter(pl.col("pub_year") <= until_year)
+    if concept_id:
+        arts = arts.join(_pmids_for(concept_id), on="pmid", how="inner")
+    res = (arts
            .join(_t("journals"), on="nlm_id", how="left")
            .select("pmid", "title", "abstract", "pub_year",
                    pl.col("medline_ta").alias("journal"), "doi")
@@ -727,16 +760,25 @@ def top_cited(concept_id: str | None = None, since_year: int | None = None,
     if err:
         return {"error": err, "results": []}
     scope = _scoped(concept_id, since_year, until_year=until_year).select("pmid")
-    cited = (_t("citations")
-             .join(scope.rename({"pmid": "cited_pmid"}), on="cited_pmid", how="inner")
-             .group_by("cited_pmid").agg(pl.len().alias("times_cited"))
-             .sort("times_cited", descending=True).head(limit))
-    res = (cited.join(_t("articles").rename({"pmid": "cited_pmid"}),
+    summary = citation_counts_path(STORE, INDEX, DATASET["snapshot"])
+    if summary is not None:
+        cited = (pl.scan_parquet(summary)
+                 .join(scope.rename({"pmid": "cited_pmid"}), on="cited_pmid", how="inner"))
+    else:
+        cited = (_t("citations")
+                 .join(scope.rename({"pmid": "cited_pmid"}), on="cited_pmid", how="inner")
+                 .group_by("cited_pmid").agg(pl.len().cast(pl.UInt64).alias("times_cited")))
+    # Stable tie-breaking makes precomputed and raw paths choose the same papers.
+    cited = cited.sort(["times_cited", "cited_pmid"], descending=[True, False]).head(limit)
+    selected = _collect_heavy(cited)
+    records = article_records(STORE, INDEX, DATASET["snapshot"], selected["cited_pmid"].to_list(),
+                              ["pmid", "title", "pub_year", "nlm_id"])
+    res = (selected.lazy().join(records.lazy().rename({"pmid": "cited_pmid"}),
                       on="cited_pmid", how="left")
                 .join(_t("journals"), on="nlm_id", how="left")
                 .select(pl.col("cited_pmid").alias("pmid"), "title", "pub_year",
                         pl.col("medline_ta").alias("journal"), "times_cited")
-                .sort("times_cited", descending=True))
+                .sort(["times_cited", "pmid"], descending=[True, False]))
     full = _collect_heavy(res)
     return {"note": note,
             "caveat": ("Counts citations from papers inside this corpus only. A "
@@ -754,7 +796,7 @@ def list_study_types(concept_id: str | None = None, since_year: int | None = Non
     scope = _scoped(concept_id, since_year, until_year=until_year).select("pmid")
     res = (_t("publication_types").join(scope, on="pmid", how="inner")
            .group_by("type_name").agg(pl.col("pmid").n_unique().alias("papers"))
-           .sort("papers", descending=True))
+           .sort(["papers", "type_name"], descending=[True, False]))
     full = _collect_heavy(res)
     return {"total_types": full.height, "note": note,
             "results": full.head(limit).to_dicts()}
@@ -766,17 +808,22 @@ def find_trials(concept_id: str | None = None, since_year: int | None = None,
     concept_id, note, err = _coerce_concept(concept_id)
     if err:
         return {"error": err, "results": []}
-    scope = _scoped(concept_id, since_year, until_year=until_year).select("pmid")
+    scope = _scoped(concept_id, since_year, until_year=until_year).select("pmid", "pub_year")
     res = (_t("databank_links").filter(pl.col("accession").str.contains(r"^NCT\d{8}$"))
            .join(scope, on="pmid", how="inner")
-           .join(_t("articles"), on="pmid", how="left")
-           .select("pmid", "databank", "accession", "title", "pub_year")
-           .sort("pub_year", descending=True))
+           .select("pmid", "databank", "accession", "pub_year")
+           .sort(["pub_year", "pmid", "accession", "databank"], descending=[True, False, False, False]))
     full = _collect_heavy(res)
+    selected = full.head(limit)
+    records = article_records(STORE, INDEX, DATASET["snapshot"], selected["pmid"].to_list(),
+                              ["pmid", "title"])
+    results = (selected.join(records, on="pmid", how="left")
+               .select("pmid", "databank", "accession", "title", "pub_year")
+               .sort(["pub_year", "pmid", "accession", "databank"], descending=[True, False, False, False]))
     return {"total_links": full.height, "note": note,
             "caveat": ("Only explicitly recorded NCT links are included. "
                        "This is not a substitute for the ClinicalTrials.gov corpus."),
-            "results": full.head(limit).to_dicts()}
+            "results": results.to_dicts()}
 
 
 def compare_concepts(concept_a: str, concept_b: str,

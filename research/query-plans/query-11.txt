@@ -1,0 +1,45 @@
+UNOPTIMIZED
+SLICE[offset: 0, len: 20]
+  SORT BY [descending: [true, false]] [col("times_cited"), col("cited_pmid")]
+    INNER JOIN:
+    LEFT PLAN ON: [col("cited_pmid")]
+      Parquet SCAN [C:/Users/User/Downloads/pubmed-ai/covid-files/indexes/6f269c0288fb98ea0c96/analytics/citation-counts-dd58fe67e4944be08c406bd6784daa7f.parquet]
+      PROJECT */2 COLUMNS
+      ESTIMATED ROWS: 14611624
+    RIGHT PLAN ON: [col("cited_pmid")]
+      SELECT [col("pmid").alias("cited_pmid")]
+        SELECT [col("pmid")]
+          INNER JOIN:
+          LEFT PLAN ON: [col("pmid")]
+            FILTER col("pub_year") <= 2024
+            FROM
+              FILTER col("pub_year") >= 2020
+              FROM
+                Parquet SCAN [C:/Users/User/Downloads/pubmed-ai/covid-files/stores/6f269c0288fb98ea0c96/articles.parquet]
+                PROJECT */18 COLUMNS
+                ESTIMATED ROWS: 3217739
+          RIGHT PLAN ON: [col("pmid")]
+            DF ["pmid"]; PROJECT */1 COLUMNS
+          END INNER JOIN
+    END INNER JOIN
+
+OPTIMIZED
+SORT BY [slice: (0, 20), descending: [true, false]] [col("times_cited"), col("cited_pmid")]
+  INNER JOIN:
+  LEFT PLAN ON: [col("cited_pmid")]
+    Parquet SCAN [C:/Users/User/Downloads/pubmed-ai/covid-files/indexes/6f269c0288fb98ea0c96/analytics/citation-counts-dd58fe67e4944be08c406bd6784daa7f.parquet]
+    PROJECT */2 COLUMNS
+    ESTIMATED ROWS: 14611624
+  RIGHT PLAN ON: [col("cited_pmid")]
+    SELECT [col("pmid").alias("cited_pmid")]
+      INNER JOIN:
+      LEFT PLAN ON: [col("pmid")]
+        simple π 1/1 ["pmid"]
+          Parquet SCAN [C:/Users/User/Downloads/pubmed-ai/covid-files/stores/6f269c0288fb98ea0c96/articles.parquet]
+          PROJECT 2/18 COLUMNS
+          SELECTION: (col("pub_year") >= 2020) & (col("pub_year") <= 2024)
+          ESTIMATED ROWS: 3217739
+      RIGHT PLAN ON: [col("pmid")]
+        DF ["pmid"]; PROJECT */1 COLUMNS
+      END INNER JOIN
+  END INNER JOIN

@@ -21,6 +21,7 @@ import threading
 import json
 import queue
 import re
+import inspect
 from typing import Any
 
 # Default the store/index locations before tools.py reads them, so the app
@@ -35,10 +36,20 @@ from fastapi import FastAPI, HTTPException, Query          # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse  # noqa: E402
 
 import tools                                               # noqa: E402
+from response_cache import ResponseCache                    # noqa: E402
 
 app = FastAPI(title="PubMed Literature Intelligence", docs_url="/api/docs")
 
 STATIC = os.path.join(_HERE, "static")
+
+# Cache only deterministic reads. Model calls and streamed answers always run
+# with their own request state. The dataset is pinned until server restart.
+_response_cache = ResponseCache(
+    max_bytes=max(0, min(int(os.environ.get("PUBMED_CACHE_MB", "16")), 64)) * 1024 * 1024)
+_CACHED_READS = {"spot_concepts", "list_journals", "list_drugs", "rank_kols",
+                 "search_literature", "trend_by_year", "list_countries",
+                 "list_institutions", "top_cited", "list_study_types",
+                 "find_trials", "compare_concepts", "list_papers", "article_detail"}
 
 
 # --------------------------------------------------------------- retrieval
@@ -115,9 +126,18 @@ def _readiness() -> dict[str, Any]:
 
 
 def _timed(fn, *a, **kw):
-    t0 = time.time()
-    out = fn(*a, **kw)
-    return out, round((time.time() - t0) * 1000)
+    t0 = time.monotonic()
+    if getattr(fn, "__module__", None) == tools.__name__ and fn.__name__ in _CACHED_READS:
+        bound = inspect.signature(fn).bind(*a, **kw)
+        bound.apply_defaults()
+        retrieval_options = {name: os.environ.get(name) for name in (
+            "PUBMED_USE_ANN", "PUBMED_ANN_NPROBES", "PUBMED_ANN_REFINE", "PUBMED_RERANKER")}
+        key = json.dumps([str(tools.STORE), str(tools.INDEX), tools.DATASET["snapshot"],
+                          fn.__name__, bound.arguments, retrieval_options], sort_keys=True)
+        out = _response_cache.get_or_compute(key, lambda: fn(*a, **kw))
+    else:
+        out = fn(*a, **kw)
+    return out, round((time.monotonic() - t0) * 1000)
 
 
 # --------------------------------------------------------------- endpoints
@@ -125,6 +145,15 @@ def _timed(fn, *a, **kw):
 @app.on_event("startup")
 def _warm():
     """Warm lexical shards; retain failures so health can report unavailability."""
+    # Pay optional artifact verification once at startup, before user requests.
+    from article_lookup import article_lookup_path
+    from analytics_index import citation_counts_path
+    import logging
+    for verify in (article_lookup_path, citation_counts_path):
+        try:
+            verify(tools.STORE, tools.INDEX, tools.DATASET["snapshot"])
+        except Exception:
+            logging.getLogger(__name__).warning("Optional performance index unavailable; using source fallback")
     _search_state["warmed"] = False
     engine = _searcher()
     if engine is not None:
@@ -249,17 +278,8 @@ def api_search(q: str = Query(..., min_length=2, max_length=4000), k: int = Quer
                      until_year=until_year, concept_id=concept_id)
     out["ms"] = ms
     out["exact"] = False          # a ranked sample, never a total
-    pmids = [r["pmid"] for r in out.get("results", [])]
-    if pmids:
-        full = {a["pmid"]: a for a in tools.get_articles(
-            pmids, concept_id=concept_id, since_year=since_year,
-            until_year=until_year)["results"]}
-        for r in out["results"]:
-            a = full.get(r["pmid"], {})
-            abstract = a.get("abstract") or ""
-            r["snippet"] = abstract[:320] + ("…" if len(abstract) > 320 else "")
-            r["doi"] = a.get("doi")
-            r["journal"] = a.get("journal") or r.get("medline_ta")
+    # HybridSearch hydrates the returned papers once, including card metadata.
+    # Reopening these abstracts here duplicated the largest Parquet scan.
     return out
 
 

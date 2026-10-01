@@ -9,9 +9,23 @@ import numpy as np
 import polars as pl
 import pyarrow.parquet as pq
 from dataset import paths, atomic_json, read_json, digest, space_guard, BuildLock
+from article_lookup import article_records
 
 CHUNK_VERSION = "token-offset-v1"
 BGE_SMALL_REVISION = "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a"
+
+
+def _top_indices(scores, eligible, k):
+    """Select a bounded top-k, retaining historical row-order ties exactly."""
+    if k <= 0:
+        return eligible[:0]
+    if eligible.size > k:
+        values = scores[eligible]
+        threshold = np.partition(values, values.size - k)[values.size - k]
+        better = eligible[values > threshold]
+        tied = eligible[values == threshold][:k - better.size]
+        eligible = np.sort(np.concatenate((better, tied)))
+    return eligible[np.argsort(-scores[eligible], kind="stable")]
 
 
 def article_batches(batch=2000):
@@ -80,6 +94,7 @@ class BM25Search:
         # searches unnecessarily expensive. Keep the memory-mapped retriever and
         # its compact metadata table after the first use in this process.
         self._loaded = {}
+        self._metadata = {}
 
     def close(self):
         """Release NumPy memory maps, especially important for Windows files."""
@@ -90,6 +105,7 @@ class BM25Search:
                 if mapping is not None:
                     mapping.close()
         loaded.clear()
+        getattr(self, "_metadata", {}).clear()
 
     def __del__(self):
         self.close()
@@ -105,8 +121,15 @@ class BM25Search:
             mmap = os.environ.get("PUBMED_BM25_MMAP", "1" if mmap_default else "0") == "1"
             cached = (self.module.BM25.load(str(shard), load_corpus=False, mmap=mmap,
                                             show_progress=False),
-                      pl.read_parquet(shard / "meta.parquet"))
+                      self._load_meta(name))
             self._loaded[name] = cached
+        return cached
+
+    def _load_meta(self, name):
+        cached = self._metadata.get(name)
+        if cached is None:
+            cached = pl.read_parquet(self.index / name / "meta.parquet")
+            self._metadata[name] = cached
         return cached
 
     def warm(self):
@@ -119,19 +142,25 @@ class BM25Search:
         total = 0
         tokens = self.module.tokenize([query], stopwords="en", stemmer=self.stemmer,
                                      return_ids=False, show_progress=False)[0]
+        allowed = (pl.Series("pmid", list(allowed_pmids), dtype=pl.String).implode()
+                   if allowed_pmids is not None else None)
         for name in self.cfg["shards"]:
-            r, meta = self._load_shard(name)
+            # Filter compact metadata before loading/scoring the large BM25 arrays.
+            meta = self._load_meta(name)
             mask = np.ones(meta.height, dtype=bool)
             if since_year is not None:
                 mask &= (meta["pub_year"] >= since_year).fill_null(False).to_numpy()
             if until_year is not None:
                 mask &= (meta["pub_year"] <= until_year).fill_null(False).to_numpy()
-            if allowed_pmids is not None:
-                mask &= meta["pmid"].is_in(allowed_pmids).to_numpy()
+            if allowed is not None:
+                mask &= meta["pmid"].is_in(allowed).to_numpy()
+            if not mask.any():
+                continue
+            r, _ = self._load_shard(name)
             scores = r.get_scores(tokens)
             eligible = np.flatnonzero(mask & (scores > 0))
             total += int(eligible.size)
-            order = eligible[np.argsort(-scores[eligible], kind="stable")[:k]]
+            order = _top_indices(scores, eligible, k)
             out.extend({**meta.row(int(i), named=True), "score": float(scores[i])} for i in order)
         return sorted(out, key=lambda row: (-row["score"], row["pmid"]))[:k], total
 
@@ -328,6 +357,16 @@ class HybridSearch:
             found.update({row["chunk_id"]: row for row in rows.iter_rows(named=True)})
         return found
 
+    def _article_candidates(self, order, k):
+        columns = ["pmid", "title", "abstract", "pub_year", "source_member", "doi", "nlm_id"]
+        ids = order if self.reranker else order[:k]
+        records = article_records(self.store, self.index, self.dataset["snapshot"], ids, columns)
+        # Preserve the original behavior if a candidate references a missing paper.
+        if not self.reranker and records.height < min(k, len(order)):
+            remaining = article_records(self.store, self.index, self.dataset["snapshot"], order[k:], columns)
+            records = pl.concat([records, remaining])
+        return records
+
     def search(self, query, k=10, since_year=None, rrf_k=60, until_year=None, allowed_pmids=None):
         if not isinstance(k, int) or not 1 <= k <= 50:
             raise ValueError("k must be between 1 and 50")
@@ -339,6 +378,7 @@ class HybridSearch:
             query, k * 5, since_year, until_year, allowed_pmids)
         pools = {"bm25": lexical}
         passages = {}
+        vector_hits = []
         if self.dense:
             query_text = "Represent this sentence for searching relevant passages: " + query if "bge-" in self.dense else query
             vector = self.model.encode([query_text], normalize_embeddings=True)[0].tolist()
@@ -360,26 +400,49 @@ class HybridSearch:
             if predicates:
                 search = search.where(" AND ".join(predicates), prefilter=True)
             hits = search.limit(k * 10).to_list()
-            external = self._external_passages(hits) if hits and "passage_file" in hits[0] else None
+            vector_hits = hits
             unique = {}
             for hit in hits:
                 unique.setdefault(hit["pmid"], hit)
-                evidence = external.get(hit["chunk_id"]) if external is not None else {
-                    key: hit[key] for key in ("chunk_id", "section", "text")}
-                if evidence:
-                    passages.setdefault(hit["pmid"], []).append(evidence)
             pools["vector"] = list(unique.values())
         fused = {}
         for hits in pools.values():
             for rank, hit in enumerate(hits):
                 fused[hit["pmid"]] = fused.get(hit["pmid"], 0) + 1 / (rrf_k + rank + 1)
         order = sorted(fused, key=lambda p: (-fused[p], p))[:k * 5]
-        records = pl.scan_parquet(self.store / "articles.parquet").filter(pl.col("pmid").is_in(order)).collect().to_dicts()
+        records = []
+        if order:
+            records = (self._article_candidates(order, k)
+                       .lazy()
+                       .join(pl.scan_parquet(self.store / "journals.parquet")
+                             .select("nlm_id", pl.col("medline_ta").alias("journal")),
+                             on="nlm_id", how="left")
+                       .collect(engine="streaming").to_dicts())
+        records.sort(key=lambda row: (-fused[row["pmid"]], row["pmid"]))
+        if not self.reranker:
+            records = records[:k]
+        # Fusion needs all vector IDs, but source text is needed only for the
+        # selected papers (or reranking candidates), at most two passages each.
+        selected = {row["pmid"] for row in records}
+        needed, per_paper = [], {}
+        for hit in vector_hits:
+            pmid = hit["pmid"]
+            if pmid in selected and per_paper.get(pmid, 0) < 2:
+                needed.append(hit)
+                per_paper[pmid] = per_paper.get(pmid, 0) + 1
+        external = self._external_passages(needed) if needed and "passage_file" in needed[0] else None
+        for hit in needed:
+            evidence = external.get(hit["chunk_id"]) if external is not None else {
+                key: hit[key] for key in ("chunk_id", "section", "text")}
+            if evidence:
+                passages.setdefault(hit["pmid"], []).append(evidence)
         results = []
         for row in records:
             evidence = passages.get(row["pmid"], [])[:2] or lexical_passages(query, row)
             results.append({"pmid": row["pmid"], "title": row["title"], "pub_year": row["pub_year"],
                 "score": fused[row["pmid"]], "has_abstract": bool(row["abstract"]), "evidence": evidence,
+                "snippet": (row["abstract"] or "")[:320] + ("…" if len(row["abstract"] or "") > 320 else ""),
+                "doi": row["doi"], "journal": row["journal"],
                 "source_member": row.get("source_member"), "url": f"https://pubmed.ncbi.nlm.nih.gov/{row['pmid']}/"})
         results.sort(key=lambda r: (-r["score"], r["pmid"]))
         if self.reranker and results:

@@ -128,5 +128,40 @@ updater pauses rather than overwriting them.
   `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`, then start
   the task again after the install succeeds.
 
-The automatic task is **not installed yet**. It can be activated after remote
-access and the deployment PC's Python, storage, network, and dataset are verified.
+The task's installation and running state must be checked on the deployment PC;
+the presence of `local_sync.py` in Git does not confirm it is enabled there.
+
+## Enable the current updater on D:
+
+Once the tested changes have been committed and pushed, stop the manually started
+server with Ctrl+C. If an older supervisor is running as the scheduled task, stop
+that task first. In PowerShell on the deployment PC:
+
+```powershell
+Set-Location D:\pubmed-ai
+git pull --ff-only origin covid-files
+powershell -NoProfile -ExecutionPolicy Bypass -File .\ops\enable_local_sync.ps1
+Get-ScheduledTask -TaskName 'PubMed AI local sync' | Select-Object TaskName, State
+Get-Content .\ops\logs\sync.log -Tail 15
+```
+
+The helper registers a normal-user task at logon and starts it now. It refuses
+to replace an unrelated task or compete with an app already using port 8010.
+The interactive task requires that account to remain signed in; disconnecting
+AnyDesk does not sign out of Windows. Keep the machine on and online.
+After the log reports app startup, verify readiness inside that desktop with
+`Invoke-RestMethod http://127.0.0.1:8010/health` and open the app in its browser.
+
+The updated supervisor prepares the citation summary and the compact article
+lookup before starting its app. Preparation is idempotent and is checked again
+after updates: unchanged indexes are reused. First preparation may take several
+minutes and needs roughly 2.2 GB of additional disk for this snapshot, plus the
+2 GB reserve. It does not recreate embeddings, change the dataset manifest, or
+download the dataset. If preparation fails, it logs the problem and serves using
+the source-file fallback. Set `PUBMED_PREPARE_PERFORMANCE=0` in `llm.env` to skip
+automatic preparation and run `manage.py performance` manually instead.
+
+Future tested commits pushed to `covid-files` are fetched every five minutes.
+Dependency changes and dataset replacements still need the separate steps above.
+When the supervisor script itself changes, restart the scheduled task once so
+the running supervisor loads its updated code.

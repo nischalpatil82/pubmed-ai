@@ -46,6 +46,15 @@ def release_manifest(output):
     files = {}
     # Publish only active lexical shards and the committed complete vector table.
     selected = list(store.glob("*.parquet")) + [store / "manifest.json", index / "lexical.json"]
+    from analytics_index import citation_counts_path, MARKER
+    citation_summary = citation_counts_path(store, index, cfg["snapshot"])
+    if citation_summary is not None:
+        selected.extend([citation_summary, citation_summary.parent / MARKER])
+    from article_lookup import article_lookup_path, MARKER as ARTICLE_MARKER
+    lookup = article_lookup_path(store, index, cfg["snapshot"])
+    if lookup is not None:
+        selected.extend([lookup, lookup.parent / ARTICLE_MARKER,
+                         lookup.parent / read_json(lookup.parent / ARTICLE_MARKER)["data_file"]])
     for shard in lexical["shards"]:
         selected.extend(p for p in (index / shard).rglob("*") if p.is_file())
     if vector and vector.get("complete") and vector.get("snapshot") == cfg["snapshot"]:
@@ -63,9 +72,22 @@ def release_manifest(output):
     return result
 
 
+def prepare_performance():
+    """Idempotent optional preparation; source data and embeddings are untouched."""
+    from analytics_index import build_citation_counts
+    from article_lookup import build_article_lookup
+    result = {}
+    for name, builder in [("citations", build_citation_counts), ("articles", build_article_lookup)]:
+        try:
+            result[name] = builder()
+        except Exception as error:
+            result[name] = {"error": str(error)}
+    return result
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("command", choices=["serve", "status", "bm25", "vectors", "release"])
+    ap.add_argument("command", choices=["serve", "status", "bm25", "vectors", "analytics", "performance", "release"])
     ap.add_argument("--dataset", default=str(DEFAULT_MANIFEST))
     ap.add_argument("--port", type=int, default=8010)
     ap.add_argument("--output", default="covid-files/release.json")
@@ -85,6 +107,15 @@ if __name__ == "__main__":
     elif a.command == "release":
         release_manifest(a.output)
         print(f"Release inventory written to {a.output}")
+    elif a.command == "analytics":
+        import json
+        from analytics_index import build_citation_counts
+        print(json.dumps(build_citation_counts(), indent=2))
+    elif a.command == "performance":
+        import json
+        result = prepare_performance()
+        print(json.dumps(result, indent=2))
+        sys.exit(1 if any("error" in item for item in result.values()) else 0)
     else:
         from retrieval import build_bm25, build_vectors
         build_bm25(a.limit) if a.command == "bm25" else build_vectors(a.model, a.limit)

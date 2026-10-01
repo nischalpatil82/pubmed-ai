@@ -37,8 +37,13 @@ class PipelineTest(unittest.TestCase):
         self.data = self.root / "data"
         self.env = patch.dict(os.environ, {"PUBMED_DATASET": str(self.data / "dataset.json")})
         self.env.start()
+        # These fixtures contain only a few records. Test their behavior even
+        # when the host is below the production index builder's 2 GB reserve.
+        self.space = patch("retrieval.space_guard")
+        self.space.start()
 
     def tearDown(self):
+        self.space.stop()
         self.env.stop()
         self.temp.cleanup()
 
@@ -102,6 +107,28 @@ class PipelineTest(unittest.TestCase):
         result = HybridSearch().search("zebrafish", since_year=2020)
         self.assertEqual(result["retrievers"], ["bm25"])
         self.assertEqual(result["results"][0]["evidence"][0]["section"], "title")
+        self.assertEqual(result["keyword_match_count"], 1)
+        self.assertIn("journal", result["results"][0])
+        self.assertIn("doi", result["results"][0])
+        self.assertEqual(result["results"][0]["snippet"], "")
+
+    def test_corpus_abstract_counts_with_and_without_parquet_statistics(self):
+        self.ingest([("a.xml", article(1) + article(2, abstract=None))])
+        import tools
+        store, index, cfg = paths()
+        with patch.multiple(tools, STORE=store, INDEX=index, DATASET=cfg):
+            tools._cached_corpus_stats.cache_clear()
+            tools._vocab.cache_clear()
+            with_stats = tools.corpus_stats()
+            self.assertEqual(with_stats["articles"], 2)
+            self.assertEqual(with_stats["with_abstract"], 1)
+            self.assertEqual(with_stats["without_abstract"], 1)
+            article_file = store / "articles.parquet"
+            pl.read_parquet(article_file).write_parquet(article_file, statistics=False)
+            tools._cached_corpus_stats.cache_clear()
+            self.assertEqual(tools.corpus_stats(), with_stats)
+            tools._cached_corpus_stats.cache_clear()
+            tools._vocab.cache_clear()
 
     def test_partial_lexical_refused(self):
         self.ingest([("a.xml", article(1) + article(2))])
@@ -261,7 +288,13 @@ class PipelineTest(unittest.TestCase):
         self.assertFalse(any((index / "vector-parts").rglob("*.parquet")))
         self.assertTrue(any((index / "passage-parts").rglob("*.parquet")))
         with patch("retrieval._encoder", return_value=Model()):
-            result = HybridSearch().search("target", k=2)
+            engine = HybridSearch()
+            with patch.object(engine, "_external_passages", wraps=engine._external_passages) as reads:
+                result = engine.search("target", k=2)
+            hydrated = reads.call_args.args[0]
+            self.assertLessEqual(len(hydrated), 4)
+            self.assertTrue(all(hit["pmid"] in {row["pmid"] for row in result["results"]}
+                                for hit in hydrated))
         self.assertEqual(result["vector_status"], "complete")
         self.assertTrue(any("target evidence" in evidence["text"]
                             for row in result["results"] for evidence in row["evidence"]))

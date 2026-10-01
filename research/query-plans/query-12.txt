@@ -1,0 +1,36 @@
+UNOPTIMIZED
+SORT BY [descending: [true, false]] [col("times_cited"), col("pmid")]
+  SELECT [col("cited_pmid").alias("pmid"), col("title"), col("pub_year"), col("medline_ta").alias("journal"), col("times_cited")]
+    LEFT JOIN:
+    LEFT PLAN ON: [col("nlm_id")]
+      LEFT JOIN:
+      LEFT PLAN ON: [col("cited_pmid")]
+        DF ["cited_pmid", "times_cited"]; PROJECT */2 COLUMNS
+      RIGHT PLAN ON: [col("cited_pmid")]
+        SELECT [col("pmid").alias("cited_pmid"), col("title"), col("pub_year"), col("nlm_id")]
+          DF ["pmid", "title", "pub_year", "nlm_id"]; PROJECT */4 COLUMNS
+      END LEFT JOIN
+    RIGHT PLAN ON: [col("nlm_id")]
+      Parquet SCAN [C:/Users/User/Downloads/pubmed-ai/covid-files/stores/6f269c0288fb98ea0c96/journals.parquet]
+      PROJECT */6 COLUMNS
+      ESTIMATED ROWS: 14098
+    END LEFT JOIN
+
+OPTIMIZED
+SORT BY [descending: [true, false]] [col("times_cited"), col("pmid")]
+  SELECT [col("cited_pmid").alias("pmid"), col("title"), col("pub_year"), col("medline_ta").alias("journal"), col("times_cited")]
+    simple π 5/5 ["cited_pmid", "title", ... 3 other columns]
+      LEFT JOIN:
+      LEFT PLAN ON: [col("nlm_id")]
+        LEFT JOIN:
+        LEFT PLAN ON: [col("cited_pmid")]
+          DF ["cited_pmid", "times_cited"]; PROJECT */2 COLUMNS
+        RIGHT PLAN ON: [col("cited_pmid")]
+          SELECT [col("pmid").alias("cited_pmid"), col("title"), col("pub_year"), col("nlm_id")]
+            DF ["pmid", "title", "pub_year", "nlm_id"]; PROJECT */4 COLUMNS
+        END LEFT JOIN
+      RIGHT PLAN ON: [col("nlm_id")]
+        Parquet SCAN [C:/Users/User/Downloads/pubmed-ai/covid-files/stores/6f269c0288fb98ea0c96/journals.parquet]
+        PROJECT 2/6 COLUMNS
+        ESTIMATED ROWS: 14098
+      END LEFT JOIN

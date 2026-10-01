@@ -14,6 +14,17 @@ def result(stdout="", returncode=0):
 
 
 class LocalSyncTest(unittest.TestCase):
+    def test_preparation_uses_selected_dataset_without_stopping_fallback_on_failure(self):
+        dataset = Path("D:/pubmed-ai/covid-files/dataset.json")
+        with patch.object(local_sync.subprocess, "run", return_value=result(returncode=1)) as run:
+            local_sync.prepare_performance(dataset, {}, None)
+        self.assertEqual(run.call_args.args[0][-3:], ["performance", "--dataset", str(dataset)])
+        with patch.object(local_sync.subprocess, "run") as run:
+            local_sync.prepare_performance(dataset, {"PUBMED_PREPARE_PERFORMANCE": "0"}, None)
+            run.assert_not_called()
+        with patch.object(local_sync.subprocess, "run", side_effect=subprocess.TimeoutExpired("prepare", 1800)):
+            local_sync.prepare_performance(dataset, {}, None)
+
     def test_dirty_checkout_is_not_fetched_or_updated(self):
         calls = []
 

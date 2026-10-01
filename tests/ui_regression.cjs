@@ -234,7 +234,8 @@ test('launcher source uses only literal PUBMED entries and no implicit consent (
   assert.match(source, /SetEnvironmentVariable\(\$Name, \$Value, 'Process'\)/);
   assert.doesNotMatch(source, /Invoke-Expression|iex\s|PUBMED_ALLOW_CLOUD|PUBMED_LLM|PUBMED_API_KEY/);
   assert.doesNotMatch(source, /Write-\w+[^\r\n]*\$(?:Value|Line)(?!\w)/);
-  assert.equal((source.match(/^python /gm) || []).length, 1);
+  assert.equal((source.match(/^\s*python /gm) || []).length, 1);
+  assert.match(source, /& \$VenvPython /);
   assert.match(source, /manage\.py" serve --dataset "\$Dataset" --port \$Port/);
 });
 
@@ -272,6 +273,82 @@ test('changing scope while overview is open reloads its analytics', async () => 
   await u.run('S.view="overview";S.concepts=[{concept_id:"D2",concept_name:"Two"}];pick(0)');
   assert.ok(u.requests.some(r=>r.pathname==='/api/trend' && r.searchParams.get('concept_id')==='D2'));
   assert.match(u.node('#work').innerHTML,/Research overview/);
+});
+
+test('overview panels appear while search and slower panels are still pending', async () => {
+  const replies = new Map();
+  const u = ui(url => url.pathname === '/api/resolve' ? {concepts:[]} : new Promise(resolve => replies.set(url.pathname, resolve)));
+  u.node('#q').value = 'new query'; u.node('#k').value = '20';
+  const work = u.run('S.restoreView="overview";search()');
+  for (let i=0; i<10; i++) await Promise.resolve();
+  assert.ok(replies.has('/api/search'));
+  assert.ok(replies.has('/api/trend'), 'overview starts before search finishes');
+  assert.equal(u.run('S.overview.cited.loading'), true);
+  assert.doesNotMatch(u.node('#work').innerHTML, /no results array/);
+  replies.get('/api/trend')({results:[{pub_year:2021,papers:9}],total_papers:9});
+  for (let i=0; i<10; i++) await Promise.resolve();
+  assert.match(u.node('#work').innerHTML, /2021: 9 papers/);
+  assert.equal(u.run('S.results'), null);
+  assert.equal(u.run('S.overview.cited.loading'), true);
+  replies.get('/api/search')({results:[],keyword_match_count:42});
+  for (const path of ['/api/study_types','/api/cited','/api/trials']) replies.get(path)({results:[]});
+  await work;
+  assert.match(u.node('#matchTotal').innerHTML, /42/);
+});
+
+test('switching to evidence during search shares the in-flight ranking request', async () => {
+  let finish;
+  const u = ui(() => new Promise(resolve => {finish=resolve}));
+  u.run('S.view="overview";S.results=null');
+  const ranking = u.run('evidence()');
+  const switchView = u.run('setview("evidence")');
+  assert.equal(u.requests.filter(r=>r.pathname==='/api/search').length, 1);
+  finish({results:[],keyword_match_count:7});
+  await Promise.all([ranking, switchView]);
+  assert.match(u.node('#work').innerHTML, /7 matching papers/);
+});
+
+test('selecting a concept during search releases old busy controls and discards old ranking', async () => {
+  const rankings = [];
+  const u = ui(url => url.pathname === '/api/resolve' ? {concepts:[]} : url.pathname === '/api/search'
+    ? new Promise(resolve=>rankings.push(resolve)) : {results:[]});
+  u.node('#q').value = 'topic'; u.node('#k').value = '20';
+  const old = u.run('S.restoreView="overview";search()');
+  for(let i=0;i<10;i++) await Promise.resolve();
+  const fresh = u.run('S.concepts=[{concept_id:"D2",concept_name:"Two"}];pick(0)');
+  rankings[1]({results:[],keyword_match_count:7});
+  await fresh;
+  rankings[0]({results:[],keyword_match_count:99});
+  await old;
+  assert.equal(u.run('S.results.keyword_match_count'),7);
+  assert.equal(u.node('#go').disabled,false);
+});
+
+test('partial analytics completion does not replace an open article', async () => {
+  const replies = [];
+  const u = ui(() => new Promise(resolve => replies.push(resolve)));
+  const work = u.run('S.view="overview";overview()');
+  u.run('S.article={pmid:"123"}');
+  u.node('#work').innerHTML = 'Open article';
+  replies.forEach(resolve=>resolve({results:[],total_papers:9}));
+  await work;
+  assert.equal(u.node('#work').innerHTML, 'Open article');
+  assert.equal(u.run('S.overview.trend.total_papers'), 9);
+});
+
+test('search completion leaves a question being typed in Ask intact', async () => {
+  const replies = new Map();
+  const u = ui(url => url.pathname === '/api/resolve' ? {concepts:[]} : new Promise(resolve => replies.set(url.pathname, resolve)));
+  u.node('#q').value = 'topic'; u.node('#k').value = '20';
+  const work = u.run('S.restoreView="overview";search()');
+  for (let i=0; i<10; i++) await Promise.resolve();
+  await u.run('setview("ask")');
+  u.node('#askQuestion').value = 'Question being typed';
+  u.node('#work').innerHTML = 'Current Ask form';
+  for (const finish of replies.values()) finish({results:[],keyword_match_count:2});
+  await work;
+  assert.equal(u.node('#work').innerHTML, 'Current Ask form');
+  assert.equal(u.node('#askQuestion').value, 'Question being typed');
 });
 
 test('registry links recognize NCT IDs and reject arbitrary external links', () => {

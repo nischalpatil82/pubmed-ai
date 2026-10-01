@@ -1,0 +1,28 @@
+{
+  "trend": {
+    "ms": 343.0,
+    "rows": 5,
+    "totals": {
+      "total_papers": 2335190
+    }
+  },
+  "study_types": {
+    "ms": 974.1,
+    "rows": 20,
+    "totals": {
+      "total_types": 76
+    }
+  },
+  "cited": {
+    "ms": 5092.9,
+    "rows": 20,
+    "totals": {}
+  },
+  "trials": {
+    "ms": 688.1,
+    "rows": 25,
+    "totals": {
+      "total_links": 32308
+    }
+  }
+}
